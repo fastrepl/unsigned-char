@@ -3885,6 +3885,7 @@ name = "unsigned-char"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "swift-rs",
  "tauri",
  "tauri-build",
 ]

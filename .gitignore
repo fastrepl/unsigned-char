@@ -13,6 +13,7 @@ dist-ssr
 *.local
 src-tauri/target
 src-tauri/gen
+.codex/
 
 # Editor directories and files
 .vscode/*

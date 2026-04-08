@@ -14,9 +14,10 @@ It is meant to:
 The intended flow is simple:
 
 1. Open the app.
-2. Start a session.
-3. Let it listen to your mic and system audio together.
-4. Read the transcript as the meeting happens.
+2. Grant microphone and system audio access.
+3. Start a session.
+4. Let it listen to your mic and system audio together.
+5. Read the transcript as the meeting happens.
 
 ## Current status
 
@@ -36,6 +37,9 @@ actual audio capture and transcription flow are not wired yet.
    ```bash
    npm run tauri dev
    ```
+
+3. When the app opens, finish the permission onboarding before using the rest of
+   the app.
 
 ## Note for development
 

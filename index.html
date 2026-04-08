@@ -10,93 +10,169 @@
 
   <body>
     <main class="shell">
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Local-first meeting transcription</p>
-          <h1>unsigned char</h1>
-          <p class="lede">
-            A simple Tauri desktop app for capturing microphone and system
-            audio together, then transcribing meetings on-device with
-            <span id="engine-name">Qwen ASR</span>.
-          </p>
-        </div>
-
-        <aside class="session-panel">
-          <p class="panel-label">Session scaffold</p>
-          <p class="session-state" id="session-state">Ready to wire native audio capture</p>
-          <button class="primary-button" id="session-toggle" type="button">
-            Simulate local session
-          </button>
-          <p class="session-note" id="session-note">
-            UI scaffold only. Native capture and Qwen inference are the next
-            integration steps.
-          </p>
-        </aside>
-      </section>
-
-      <section class="dashboard">
-        <article class="card">
-          <p class="card-label">Audio sources</p>
-          <h2>Mix mic and system audio in one session</h2>
-          <p class="card-copy">
-            Keep both inputs visible so the transcript pipeline can evolve
-            toward dual-source capture instead of a single-device shortcut.
-          </p>
-
-          <div class="source-grid">
-            <button class="source-chip is-active" data-source="mic" type="button">
-              Microphone
-            </button>
-            <button class="source-chip is-active" data-source="system" type="button">
-              System audio
-            </button>
+      <section class="gate" id="onboarding-view">
+        <div class="gate-hero">
+          <div class="gate-copy">
+            <p class="eyebrow">Permission-first onboarding</p>
+            <h1>Give unsigned char permission to listen before it does anything else.</h1>
+            <p class="lede">
+              This flow is modeled after Char. Grant microphone and system audio
+              access first, then the rest of the app unlocks.
+            </p>
           </div>
 
-          <p class="source-summary" id="source-summary">
-            Selected: microphone and system audio
-          </p>
-        </article>
+          <aside class="gate-side">
+            <p class="panel-label">Before using the app</p>
+            <ol class="step-list">
+              <li>Allow microphone access so unsigned char can hear you.</li>
+              <li>Allow system audio access so it can hear everyone else.</li>
+              <li>The workspace unlocks automatically once both are granted.</li>
+            </ol>
+          </aside>
+        </div>
 
-        <article class="card">
-          <p class="card-label">Inference path</p>
-          <h2>On-device Qwen ASR pipeline</h2>
-          <p class="card-copy">
-            The backend owns model configuration so the frontend can stay thin
-            while Rust handles capture, chunking, and transcription.
-          </p>
-
-          <ol class="pipeline">
-            <li class="pipeline-step" data-stage="capture">Capture audio streams</li>
-            <li class="pipeline-step" data-stage="align">Align and normalize frames</li>
-            <li class="pipeline-step" data-stage="transcribe">Run local Qwen ASR</li>
-            <li class="pipeline-step" data-stage="render">Render rolling transcript</li>
-          </ol>
-        </article>
-
-        <article class="card">
-          <p class="card-label">Reference</p>
-          <h2>Use <code>../char</code> as the nearby implementation guide</h2>
-          <p class="card-copy">
-            This repo stays intentionally small. When it is time to wire native
-            audio and transcription internals, inspect <code>../char</code> for
-            real capture and offline-transcription patterns.
-          </p>
-
-          <dl class="reference-list">
-            <div>
-              <dt>Model target</dt>
-              <dd id="reference-engine">Qwen ASR</dd>
+        <div class="permission-grid">
+          <article class="permission-card" data-permission-card="microphone">
+            <p class="permission-badge">Mic</p>
+            <h3 data-permission-title="microphone">Allow microphone access</h3>
+            <p class="permission-body" data-permission-body="microphone">
+              Help unsigned char hear your side of the meeting.
+            </p>
+            <div class="permission-footer">
+              <span class="permission-status" data-permission-status="microphone">
+                Not requested
+              </span>
+              <button
+                class="permission-button"
+                data-permission-action="microphone"
+                type="button"
+              >
+                Allow access
+              </button>
             </div>
-            <div>
-              <dt>Reference path</dt>
-              <dd id="reference-path">../char</dd>
+          </article>
+
+          <article class="permission-card" data-permission-card="systemAudio">
+            <p class="permission-badge">Sys</p>
+            <h3 data-permission-title="systemAudio">Allow system audio access</h3>
+            <p class="permission-body" data-permission-body="systemAudio">
+              Help unsigned char hear the meeting audio coming through your Mac.
+            </p>
+            <div class="permission-footer">
+              <span class="permission-status" data-permission-status="systemAudio">
+                Not requested
+              </span>
+              <button
+                class="permission-button"
+                data-permission-action="systemAudio"
+                type="button"
+              >
+                Allow access
+              </button>
             </div>
-            <div>
-              <dt>Current scope</dt>
-              <dd>Desktop shell, session UI, and app blueprint wiring</dd>
+          </article>
+        </div>
+
+        <div class="gate-footer">
+          <p class="gate-note" id="gate-note">
+            unsigned char stays locked until both microphone and system audio
+            access are granted.
+          </p>
+          <button class="secondary-button" id="refresh-permissions" type="button">
+            Refresh permissions
+          </button>
+        </div>
+      </section>
+
+      <section class="workspace is-hidden" id="workspace-view">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Local-first meeting transcription</p>
+            <h1>unsigned char</h1>
+            <p class="lede">
+              A simple Tauri desktop app for capturing microphone and system
+              audio together, then transcribing meetings on-device with
+              <span id="engine-name">Qwen ASR</span>.
+            </p>
+          </div>
+
+          <aside class="session-panel">
+            <p class="panel-label">Session scaffold</p>
+            <p class="session-state" id="session-state">Permissions ready</p>
+            <button class="primary-button" id="session-toggle" type="button">
+              Simulate local session
+            </button>
+            <p class="session-note" id="session-note">
+              The app is unlocked. Native capture and Qwen ASR still need to be
+              wired in.
+            </p>
+          </aside>
+        </section>
+
+        <section class="dashboard">
+          <article class="card">
+            <p class="card-label">Audio sources</p>
+            <h2>Mix mic and system audio in one session</h2>
+            <p class="card-copy">
+              Keep both inputs visible so the transcript pipeline can evolve
+              toward dual-source capture instead of a single-device shortcut.
+            </p>
+
+            <div class="source-grid">
+              <button class="source-chip is-active" data-source="mic" type="button">
+                Microphone
+              </button>
+              <button class="source-chip is-active" data-source="system" type="button">
+                System audio
+              </button>
             </div>
-          </dl>
-        </article>
+
+            <p class="source-summary" id="source-summary">
+              Selected: microphone and system audio
+            </p>
+          </article>
+
+          <article class="card">
+            <p class="card-label">Inference path</p>
+            <h2>On-device Qwen ASR pipeline</h2>
+            <p class="card-copy">
+              The backend owns model configuration so the frontend can stay thin
+              while Rust handles capture, chunking, and transcription.
+            </p>
+
+            <ol class="pipeline">
+              <li class="pipeline-step" data-stage="capture">Capture audio streams</li>
+              <li class="pipeline-step" data-stage="align">Align and normalize frames</li>
+              <li class="pipeline-step" data-stage="transcribe">Run local Qwen ASR</li>
+              <li class="pipeline-step" data-stage="render">Render rolling transcript</li>
+            </ol>
+          </article>
+
+          <article class="card">
+            <p class="card-label">Reference</p>
+            <h2>Shout out to <code id="reference-path">fastrepl/char</code></h2>
+            <p class="card-copy">
+              This repo stays intentionally small. When it is time to wire the
+              real capture and transcription internals, use Char as the nearby
+              product reference.
+            </p>
+
+            <dl class="reference-list">
+              <div>
+                <dt>Model target</dt>
+                <dd id="reference-engine">Qwen ASR</dd>
+              </div>
+              <div>
+                <dt>Reference</dt>
+                <dd>Permission-first onboarding and meeting UX</dd>
+              </div>
+              <div>
+                <dt>Current scope</dt>
+                <dd>Desktop shell, gated onboarding, and app blueprint wiring</dd>
+              </div>
+            </dl>
+          </article>
+        </section>
       </section>
     </main>
   </body>
