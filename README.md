@@ -1,48 +1,44 @@
 # unsigned char
 
-`unsigned char` is a small Tauri desktop app for local-first meeting
-transcription. The target product is straightforward:
+`unsigned char` is a simple desktop app for transcribing meetings on your own
+machine.
 
-- capture microphone and system audio together
-- keep transcription fully on-device
-- use Qwen ASR as the speech-to-text engine
+It is meant to:
 
-This repository starts as a thin desktop shell on purpose. The current baseline
-focuses on product framing, a minimal session UI, and a small Rust-to-frontend
-app blueprint so the next steps can stay native and incremental.
+- listen to your microphone and system audio at the same time
+- transcribe the conversation locally
+- use Qwen ASR for speech recognition
 
-## Reference repo
+## How it works
 
-Use `../char` as the nearby reference implementation when wiring the real audio
-and transcription path. It is not a dependency of this project. It is the local
-codebase to inspect for ideas around:
+The intended flow is simple:
 
-- audio capture and device handling
-- offline transcription architecture
-- meeting-oriented UX decisions
-
-That connection is intentional and should stay visible as this repo grows.
-
-## Planned architecture
-
-1. Capture microphone and system audio in Rust.
-2. Normalize or align the streams into a transcription-friendly format.
-3. Feed local chunks into a Qwen ASR runtime.
-4. Render a rolling transcript in the desktop UI.
-
-## Development
-
-```bash
-npm install
-npm run tauri dev
-```
+1. Open the app.
+2. Start a session.
+3. Let it listen to your mic and system audio together.
+4. Read the transcript as the meeting happens.
 
 ## Current status
 
-The app currently provides:
+This repo is still at the starting point. The app shell is in place, but the
+actual audio capture and transcription flow are not wired yet.
 
-- a renamed Tauri v2 desktop shell
-- a focused `unsigned char` UI instead of the starter template
-- a native `app_blueprint` command that describes the intended local pipeline
+## Run it
 
-It does not yet capture audio or run inference.
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Start the desktop app:
+
+   ```bash
+   npm run tauri dev
+   ```
+
+## Note for development
+
+If you want a nearby reference while building this out, look at `../char`.
+That project already covers more of the meeting-transcription problem and is a
+good place to borrow ideas from.
