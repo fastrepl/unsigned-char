@@ -39,6 +39,6 @@ actual audio capture and transcription flow are not wired yet.
 
 ## Note for development
 
-If you want a nearby reference while building this out, look at `../char`.
-That project already covers more of the meeting-transcription problem and is a
-good place to borrow ideas from.
+Shout out to [fastrepl/char](https://github.com/fastrepl/char). It already
+covers more of the meeting-transcription problem and is a good place to borrow
+ideas from while building this out.
