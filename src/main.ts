@@ -628,13 +628,6 @@ function formatDateTimeValue(date: Date, options: Intl.DateTimeFormatOptions) {
   }
 }
 
-function formatTime(iso: string) {
-  return formatTimeValue(new Date(iso), {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 function formatDate(iso: string) {
   return formatDateValue(new Date(iso), {
     month: "short",
@@ -1144,7 +1137,7 @@ function renderMeeting() {
             </h1>
           </div>
           <p class="meeting-subtitle">
-            <span>${formatTime(meeting.createdAt)}</span>
+            <span>${formatDateTime(meeting.createdAt)}</span>
           </p>
         </div>
       </header>
