@@ -83,10 +83,12 @@ public func _request_audio_capture_permission() -> Bool {
   let semaphore = DispatchSemaphore(value: 0)
   var granted = false
 
-  request("kTCCServiceAudioCapture" as CFString, nil) { allowed in
+  let completion: TCCRequestCompletion = { allowed in
     granted = allowed
     semaphore.signal()
   }
+
+  request("kTCCServiceAudioCapture" as CFString, nil, completion)
 
   _ = semaphore.wait(timeout: .now() + .seconds(60))
   return granted
