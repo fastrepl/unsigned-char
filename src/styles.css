@@ -184,8 +184,9 @@ button {
 }
 
 .screen.home {
-  overflow-y: auto;
-  padding-bottom: 96px;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 20px;
 }
 
 .screen.meeting {
@@ -222,6 +223,16 @@ button {
 
 .home-header {
   justify-content: flex-end;
+}
+
+.home-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 76px;
 }
 
 .screen-header-copy {
@@ -611,7 +622,7 @@ h2 {
 }
 
 .home-note {
-  margin-top: auto;
+  margin: 0;
 }
 
 .settings-screen {
@@ -1323,7 +1334,8 @@ body[data-meeting-overlay="on"] .screen {
   }
 
   .screen.home {
-    padding-bottom: 88px;
+    padding-top: 0;
+    padding-bottom: 16px;
   }
 
   .screen-header-row,
@@ -1354,6 +1366,10 @@ body[data-meeting-overlay="on"] .screen {
   .scroll-top-chip {
     right: 16px;
     bottom: 16px;
+  }
+
+  .home-content {
+    padding-bottom: 68px;
   }
 
   .meeting-row-top {

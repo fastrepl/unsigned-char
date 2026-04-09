@@ -860,7 +860,7 @@ function renderHome() {
   const permissionNote = state.permissionNote
     ? `<p class="meta home-note">${escapeHtml(state.permissionNote)}</p>`
     : "";
-  const content =
+  const meetings =
     items.length === 0
       ? `
         <div class="empty-state">
@@ -896,6 +896,7 @@ function renderHome() {
             .join("")}
         </div>
       `;
+  const content = setupBanner || meetings;
 
   return `
     <section class="screen home" id="home-screen">
@@ -911,9 +912,11 @@ function renderHome() {
         </button>
       </header>
 
-      ${setupBanner}
-      ${content}
-      ${permissionNote}
+      <div class="home-content" id="home-content">
+        ${permissionNote}
+        ${content}
+      </div>
+
       <button class="scroll-top-chip" id="scroll-home-top" type="button">
         Go to top
       </button>
@@ -1350,9 +1353,9 @@ function render() {
   syncModelDownloadPolling();
 
   if (!isSettingsWindow && state.view === "home") {
-    const homeScreen = document.querySelector<HTMLElement>("#home-screen");
-    if (homeScreen) {
-      homeScreen.scrollTop = state.homeScrollTop;
+    const homeContent = document.querySelector<HTMLElement>("#home-content");
+    if (homeContent) {
+      homeContent.scrollTop = state.homeScrollTop;
     }
     updateHomeScrollChip();
     return;
@@ -1507,15 +1510,13 @@ async function stopActiveRecordingIfNeeded(nextMeetingId: string | null = null) 
 }
 
 function updateHomeScrollChip() {
-  const homeScreen = document.querySelector<HTMLElement>("#home-screen");
-  const newMeetingButton = document.querySelector<HTMLElement>("#new-meeting");
+  const homeContent = document.querySelector<HTMLElement>("#home-content");
   const chip = document.querySelector<HTMLButtonElement>("#scroll-home-top");
-  if (!homeScreen || !newMeetingButton || !chip) {
+  if (!homeContent || !chip) {
     return;
   }
 
-  const threshold = newMeetingButton.offsetTop + newMeetingButton.offsetHeight;
-  chip.classList.toggle("visible", homeScreen.scrollTop > threshold);
+  chip.classList.toggle("visible", homeContent.scrollTop > 40);
 }
 
 function bindViewHandlers() {
@@ -1525,17 +1526,17 @@ function bindViewHandlers() {
   }
 
   if (state.view === "home") {
-    const homeScreen = document.querySelector<HTMLElement>("#home-screen");
+    const homeContent = document.querySelector<HTMLElement>("#home-content");
     const syncHomeScroll = () => {
-      if (!homeScreen) {
+      if (!homeContent) {
         return;
       }
 
-      state.homeScrollTop = homeScreen.scrollTop;
+      state.homeScrollTop = homeContent.scrollTop;
       updateHomeScrollChip();
     };
 
-    homeScreen?.addEventListener("scroll", syncHomeScroll, { passive: true });
+    homeContent?.addEventListener("scroll", syncHomeScroll, { passive: true });
 
     document.querySelector<HTMLButtonElement>("#new-meeting")?.addEventListener("click", () => {
       void startMeeting();
@@ -1546,7 +1547,7 @@ function bindViewHandlers() {
     });
 
     document.querySelector<HTMLButtonElement>("#scroll-home-top")?.addEventListener("click", () => {
-      homeScreen?.scrollTo({ top: 0, behavior: "smooth" });
+      homeContent?.scrollTo({ top: 0, behavior: "smooth" });
     });
 
     document.querySelectorAll<HTMLElement>("[data-open-meeting]").forEach((button) => {
