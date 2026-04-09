@@ -967,10 +967,94 @@ function renderSettingsWindow() {
   const note = state.generalNote
     ? `<p class="meta settings-note">${escapeHtml(state.generalNote)}</p>`
     : "";
+  const modelReady = Boolean(state.modelSettings?.selectedReady);
+  const modelDownloadStatus = state.modelDownload?.status ?? "idle";
+  const modelStatusLabel =
+    modelDownloadStatus === "downloading"
+      ? "downloading"
+      : modelReady
+        ? "ready"
+        : "needs setup";
+  const modelStatusClass =
+    modelDownloadStatus === "downloading"
+      ? "missing"
+      : modelReady
+        ? "ready"
+        : "missing";
+  const setupContent = currentSetupBannerContent();
+  const modelDetail =
+    modelDownloadStatus === "downloading" && state.modelDownload
+      ? state.modelDownload.currentFile
+        ? `${state.modelDownload.currentFile} · ${modelDownloadProgressCopy(state.modelDownload)}`
+        : modelDownloadProgressCopy(state.modelDownload)
+      : setupContent?.detail ??
+        (state.modelSettings?.selectedReference
+          ? `Stored at ${state.modelSettings.selectedReference}`
+          : "");
+  const modelStoragePath =
+    state.modelDownload?.localPath || state.modelSettings?.huggingFaceLocalPath || "";
 
   return `
     <section class="settings-shell">
       <div class="screen settings-screen settings-simple">
+        <section class="settings-panel">
+          <div class="settings-panel-header">
+            <div class="settings-copy">
+              <span class="settings-row-label">Transcription model</span>
+              <span class="meta">
+                Download Qwen3-ASR once and keep it local to this Mac for offline transcription.
+              </span>
+            </div>
+            <span class="model-status ${modelStatusClass}">${escapeHtml(modelStatusLabel)}</span>
+          </div>
+
+          <p class="meta">
+            ${escapeHtml(
+              modelReady
+                ? state.modelSettings?.huggingFaceStatus ?? "Local transcription model is ready."
+                : setupContent?.copy ?? "Download the local transcription model to continue.",
+            )}
+          </p>
+
+          ${
+            modelDetail
+              ? `<p class="meta">${escapeHtml(modelDetail)}</p>`
+              : ""
+          }
+
+          ${
+            modelStoragePath
+              ? `
+                <div class="model-path-row">
+                  <span class="meta-label">Storage</span>
+                  <code>${escapeHtml(modelStoragePath)}</code>
+                </div>
+              `
+              : ""
+          }
+
+          ${
+            !modelReady
+              ? `
+                <div class="settings-panel-actions">
+                  <button
+                    class="button primary"
+                    id="download-model"
+                    type="button"
+                    ${state.modelBusy || modelDownloadStatus === "downloading" ? "disabled" : ""}
+                  >
+                    ${
+                      state.modelBusy || modelDownloadStatus === "downloading"
+                        ? "Starting download..."
+                        : "Download model"
+                    }
+                  </button>
+                </div>
+              `
+              : ""
+          }
+        </section>
+
         <div class="settings-row-list">
           <label class="settings-row">
             <span class="settings-copy">
@@ -1627,6 +1711,10 @@ function bindViewHandlers() {
 }
 
 function bindGeneralSettingsHandlers() {
+  document.querySelector<HTMLButtonElement>("#download-model")?.addEventListener("click", () => {
+    void startManagedModelDownload();
+  });
+
   document
     .querySelector<HTMLSelectElement>("#main-language")
     ?.addEventListener("change", (event) => {
@@ -2003,6 +2091,11 @@ function handleAppFocus() {
   void ensureWindowAlwaysOnTop();
 
   if (isSettingsWindow) {
+    void Promise.all([
+      refreshGeneralSettings(true),
+      refreshManagedModelDownloadState(true),
+      refreshModelSettings(true),
+    ]);
     return;
   }
 
@@ -2019,7 +2112,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   render();
   await ensureWindowAlwaysOnTop();
   if (isSettingsWindow) {
-    await refreshGeneralSettings(true);
+    await Promise.all([
+      refreshGeneralSettings(true),
+      refreshManagedModelDownloadState(true),
+      refreshModelSettings(true),
+    ]);
     return;
   }
 

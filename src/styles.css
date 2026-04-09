@@ -549,7 +549,8 @@ h2 {
 
 .settings-row-list,
 .settings-spoken-section,
-.settings-copy {
+.settings-copy,
+.settings-panel {
   display: flex;
   flex-direction: column;
 }
@@ -565,6 +566,28 @@ h2 {
 .settings-copy {
   gap: 4px;
   min-width: 0;
+}
+
+.settings-panel {
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px) saturate(1.04);
+  -webkit-backdrop-filter: blur(16px) saturate(1.04);
+}
+
+.settings-panel-header,
+.settings-panel-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.settings-panel-header {
+  align-items: center;
+  justify-content: space-between;
 }
 
 .settings-row {
