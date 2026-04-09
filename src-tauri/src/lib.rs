@@ -166,6 +166,12 @@ struct LocalDiarizationResult {
     segments: Vec<DiarizationSegment>,
 }
 
+impl Default for ModelSource {
+    fn default() -> Self {
+        Self::Bundled
+    }
+}
+
 impl StoredModelSettings {
     fn from_input(input: SaveModelSettingsInput) -> Result<Self, String> {
         Ok(Self {

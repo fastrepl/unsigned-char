@@ -59,12 +59,12 @@ pub fn check(permission: PermissionKind) -> Result<PermissionStatus, String> {
             PermissionKind::SystemAudio => unsafe { _audio_capture_permission_status() as isize },
         };
 
-        Ok(match raw {
+        return Ok(match raw {
             GRANTED => PermissionStatus::Authorized,
             NEVER_REQUESTED => PermissionStatus::NeverRequested,
             DENIED => PermissionStatus::Denied,
             _ => PermissionStatus::Denied,
-        })
+        });
     }
 
     #[cfg(not(target_os = "macos"))]
