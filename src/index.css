@@ -2,11 +2,8 @@
 
 :root {
   color: rgba(24, 24, 27, 1);
-  background:
-    radial-gradient(circle at 12% 14%, rgba(255, 255, 255, 0.82) 0%, transparent 26%),
-    radial-gradient(circle at 84% 16%, rgba(255, 255, 255, 0.28) 0%, transparent 30%),
-    radial-gradient(circle at 88% 86%, rgba(224, 226, 232, 0.22) 0%, transparent 34%),
-    linear-gradient(180deg, rgba(246, 246, 248, 0.94), rgba(240, 241, 244, 0.96));
+  background-color: #fff;
+  color-scheme: light dark;
   font-family:
     "SF Pro Text",
     "Inter Variable",
@@ -34,19 +31,7 @@ body,
 body {
   position: relative;
   overflow: hidden;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.12) 18%, transparent 36%),
-    linear-gradient(308deg, rgba(224, 226, 232, 0.18) 0%, transparent 32%);
-  filter: blur(20px);
-  opacity: 0.92;
-  transform: translate3d(-4%, -2%, 0);
+  background-color: inherit;
 }
 
 button,
@@ -66,4 +51,10 @@ code {
     "JetBrains Mono",
     ui-monospace,
     monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    background-color: #000;
+  }
 }
