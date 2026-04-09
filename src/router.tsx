@@ -624,10 +624,12 @@ function HomeScreen() {
                 >
                   <Surface className="p-4 transition hover:-translate-y-px">
                     <div className="min-w-0">
-                      <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-zinc-950">
-                        {meeting.title}
-                      </h2>
-                      <p className="mt-2 text-sm text-zinc-600">{formatDateTime(meeting.createdAt)}</p>
+                      <div className="flex min-w-0 flex-col gap-1.5">
+                        <p className="text-sm text-zinc-600">{formatDateTime(meeting.createdAt)}</p>
+                        <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-zinc-950">
+                          {meeting.title}
+                        </h2>
+                      </div>
                     </div>
                   </Surface>
                 </button>
