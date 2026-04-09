@@ -184,7 +184,6 @@ button {
 }
 
 .screen.home {
-  overflow: hidden;
   padding-top: 0;
   padding-bottom: 20px;
 }
