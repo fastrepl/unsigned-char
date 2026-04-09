@@ -254,8 +254,12 @@ function requiresModelSetup() {
   return Boolean(state.modelSettings && !state.modelSettings.selectedReady);
 }
 
-function selectedModelStatus(settings: ModelSettings) {
-  return settings.source === "bundled" ? settings.bundledStatus : settings.huggingFaceStatus;
+function setupBannerCopy(settings: ModelSettings) {
+  if (settings.source === "bundled") {
+    return "Bundled Qwen ASR is missing.";
+  }
+
+  return "Pick a local Hugging Face snapshot.";
 }
 
 async function openSettingsWindow() {
@@ -275,8 +279,8 @@ function renderSetupBanner() {
   return `
     <button class="setup-banner" id="open-settings-banner" type="button">
       <span class="setup-banner-kicker">Setup required</span>
-      <strong class="setup-banner-title">Finish transcription model setup</strong>
-      <span class="setup-banner-copy">${escapeHtml(selectedModelStatus(state.modelSettings))}</span>
+      <strong class="setup-banner-title">Transcription model unavailable</strong>
+      <span class="setup-banner-copy">${escapeHtml(setupBannerCopy(state.modelSettings))}</span>
       <span class="setup-banner-action">Open settings</span>
     </button>
   `;
