@@ -45,7 +45,7 @@ const PYANNOTE_PIPELINE_REPO: &str = "pyannote/speaker-diarization-community-1";
 const HUGGING_FACE_TOKEN_ENV: &str = "HF_TOKEN";
 const HUGGING_FACE_ALT_TOKEN_ENV: &str = "HUGGINGFACE_TOKEN";
 #[cfg(target_os = "macos")]
-const MACOS_TAHOE_WINDOW_RADIUS: f64 = 20.0;
+const MACOS_TAHOE_WINDOW_RADIUS: f64 = 26.0;
 
 #[derive(Default)]
 struct AppState {
