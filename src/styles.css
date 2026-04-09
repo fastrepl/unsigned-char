@@ -843,6 +843,20 @@ h2 {
 .meeting-title-field {
   display: block;
   min-width: 0;
+  --meeting-title-mask: none;
+}
+
+.meeting-title-field[data-overflow-fade="start"] {
+  --meeting-title-mask: linear-gradient(to right, transparent 0, #000 36px, #000 100%);
+}
+
+.meeting-title-field[data-overflow-fade="end"] {
+  --meeting-title-mask: linear-gradient(to right, #000 0, #000 calc(100% - 36px), transparent 100%);
+}
+
+.meeting-title-field[data-overflow-fade="both"] {
+  --meeting-title-mask:
+    linear-gradient(to right, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%);
 }
 
 .meeting-title-input {
@@ -859,8 +873,8 @@ h2 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: clip;
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 36px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 36px), transparent 100%);
+  mask-image: var(--meeting-title-mask);
+  -webkit-mask-image: var(--meeting-title-mask);
 }
 
 .meeting-title-back {

@@ -1475,6 +1475,27 @@ function bindViewHandlers() {
     });
 
   const titleInput = document.querySelector<HTMLInputElement>("#meeting-title-input");
+  const titleField = document.querySelector<HTMLElement>(".meeting-title-field");
+  const syncTitleOverflowFade = () => {
+    if (!titleInput || !titleField) {
+      return;
+    }
+
+    const maxScroll = Math.max(0, titleInput.scrollWidth - titleInput.clientWidth);
+    if (maxScroll <= 1) {
+      titleField.dataset.overflowFade = "none";
+      return;
+    }
+
+    const scrollLeft = Math.max(0, titleInput.scrollLeft);
+    const threshold = 2;
+    const atStart = scrollLeft <= threshold;
+    const atEnd = scrollLeft >= maxScroll - threshold;
+    titleField.dataset.overflowFade = atStart ? "end" : atEnd ? "start" : "both";
+  };
+  const scheduleTitleOverflowFadeSync = () => {
+    window.requestAnimationFrame(syncTitleOverflowFade);
+  };
   const commitTitle = () => {
     const currentMeeting = getActiveMeeting();
     if (!titleInput || !currentMeeting) {
@@ -1498,9 +1519,16 @@ function bindViewHandlers() {
       updatedAt: new Date().toISOString(),
     }));
     titleInput.value = title;
+    scheduleTitleOverflowFadeSync();
   };
 
   titleInput?.addEventListener("change", commitTitle);
+  titleInput?.addEventListener("input", scheduleTitleOverflowFadeSync);
+  titleInput?.addEventListener("scroll", scheduleTitleOverflowFadeSync);
+  titleInput?.addEventListener("focus", scheduleTitleOverflowFadeSync);
+  titleInput?.addEventListener("blur", scheduleTitleOverflowFadeSync);
+  titleInput?.addEventListener("click", scheduleTitleOverflowFadeSync);
+  titleInput?.addEventListener("keyup", scheduleTitleOverflowFadeSync);
   titleInput?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -1519,8 +1547,10 @@ function bindViewHandlers() {
 
     event.preventDefault();
     titleInput.value = currentMeeting.title;
+    scheduleTitleOverflowFadeSync();
     titleInput.blur();
   });
+  scheduleTitleOverflowFadeSync();
 
   document
     .querySelector<HTMLInputElement>("#meeting-audio-path")
