@@ -821,11 +821,11 @@ h2 {
   align-items: flex-start;
 }
 
-.meeting-nav {
+.meeting-title-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
   margin-bottom: 16px;
 }
 
@@ -837,22 +837,11 @@ h2 {
 
 .meeting-title {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
-.meeting-title-input {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  line-height: inherit;
-  outline: none;
-  appearance: none;
-}
-
-.meeting-title {
+.meeting-title-field {
+  display: block;
   min-width: 0;
 }
 
@@ -867,6 +856,19 @@ h2 {
   line-height: inherit;
   outline: none;
   appearance: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 36px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 36px), transparent 100%);
+}
+
+.meeting-title-back {
+  flex: 0 0 auto;
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  border-radius: 999px;
 }
 
 .meeting-actions {
@@ -1008,15 +1010,9 @@ body[data-meeting-overlay="on"] .screen.meeting {
     width: 100%;
   }
 
-  .meeting-nav {
-    width: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .meeting-nav .button,
-  .meeting-nav .back-button {
-    width: auto;
+  .meeting-title-row {
+    gap: 10px;
+    margin-bottom: 12px;
   }
 
   .scroll-top-chip {
