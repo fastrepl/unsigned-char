@@ -16,7 +16,8 @@
         "title": "unsigned char",
         "width": 460,
         "height": 640,
-        "resizable": true
+        "resizable": true,
+        "hiddenTitle": true
       }
     ],
     "security": {
