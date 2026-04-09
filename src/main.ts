@@ -575,317 +575,18 @@ function renderSettingsWindow() {
   return `
     <section class="settings-shell">
       <div class="screen settings-screen">
-        ${renderModelSection()}
-        ${renderDiarizationSection()}
-      </div>
-    </section>
-  `;
-}
-
-function modelSourceSummary(settings: ModelSettings, draft: ModelDraft) {
-  if (draft.source === "bundled") {
-    return settings.bundledReady
-      ? "Using bundled Qwen3-ASR."
-      : "Bundled Qwen3-ASR is missing files.";
-  }
-
-  if (settings.huggingFaceReady) {
-    return "Using a custom snapshot.";
-  }
-
-  if (!draft.huggingFaceRepo.trim()) {
-    return "Add a model repo or URL.";
-  }
-
-  if (!draft.huggingFaceLocalPath.trim()) {
-    return "Add a local snapshot path.";
-  }
-
-  return "Snapshot folder is missing required model files.";
-}
-
-function diarizationSummary(settings: DiarizationSettings, draft: DiarizationDraft) {
-  if (!draft.enabled) {
-    return "Off until you enable it.";
-  }
-
-  if (settings.localReady) {
-    return "Local pipeline is ready.";
-  }
-
-  if (settings.huggingFaceTokenPresent) {
-    return "Ready to download the pipeline when needed.";
-  }
-
-  if (draft.localPath.trim()) {
-    return "Verify the local pipeline path or add a token.";
-  }
-
-  return "Add a local pipeline path or Hugging Face token.";
-}
-
-function diarizationTokenHint(settings: DiarizationSettings) {
-  const source = settings.huggingFaceTokenSourceLabel;
-  if (!source) {
-    return "";
-  }
-
-  if (source.includes("saved locally")) {
-    return "Token saved in app config.";
-  }
-
-  if (source.includes("HF_TOKEN")) {
-    return "Using HF_TOKEN from the environment.";
-  }
-
-  if (source.includes("HUGGINGFACE_TOKEN")) {
-    return "Using HUGGINGFACE_TOKEN from the environment.";
-  }
-
-  return source;
-}
-
-function renderModelSection() {
-  if (!state.modelSettings) {
-    return `
-      <section class="model-card">
-        <div class="model-card-header">
-          <div>
-            <p class="eyebrow">Model</p>
-            <h2>Transcription model</h2>
+        <section class="model-card">
+          <div class="model-card-header">
+            <div>
+              <p class="eyebrow">Settings</p>
+              <h2>No setup</h2>
+            </div>
           </div>
-        </div>
-        <p class="meta">Loading model settings...</p>
-      </section>
-    `;
-  }
 
-  const settings = state.modelSettings;
-  const draft = state.modelDraft;
-  const note = state.modelNote
-    ? `<p class="meta model-note">${escapeHtml(state.modelNote)}</p>`
-    : "";
-  const huggingFaceResolvedPath = settings.huggingFaceResolvedPath ?? draft.huggingFaceLocalPath.trim();
-  const showBundledLocation = draft.source === "bundled" && !settings.bundledReady;
-  const sourceDetails =
-    draft.source === "bundled"
-      ? showBundledLocation
-        ? `
-        <div class="model-path-row">
-          <span class="meta-label">Location</span>
-          <code>${escapeHtml(settings.bundledResolvedPath)}</code>
-        </div>
-      `
-        : ""
-      : `
-        <div class="field-row">
-          <label class="field field-wide">
-            <span class="meta-label">Repo or URL</span>
-            <input
-              id="hf-repo"
-              class="composer-input"
-              autocomplete="off"
-              placeholder="Qwen/Qwen3-ASR-0.6B"
-              value="${escapeHtml(draft.huggingFaceRepo)}"
-            />
-          </label>
-
-          <label class="field">
-            <span class="meta-label">Revision</span>
-            <input
-              id="hf-revision"
-              class="composer-input"
-              autocomplete="off"
-              placeholder="main"
-              value="${escapeHtml(draft.huggingFaceRevision)}"
-            />
-          </label>
-        </div>
-
-        <label class="field">
-          <span class="meta-label">Local snapshot</span>
-          <input
-            id="hf-local-path"
-            class="composer-input"
-            autocomplete="off"
-            placeholder="~/models/qwen-asr"
-            value="${escapeHtml(draft.huggingFaceLocalPath)}"
-          />
-        </label>
-
-        ${
-          huggingFaceResolvedPath
-            ? `
-          <div class="model-path-row">
-            <span class="meta-label">Resolved path</span>
-            <code>${escapeHtml(huggingFaceResolvedPath)}</code>
-          </div>
-        `
-            : ""
-        }
-      `;
-
-  return `
-    <section class="model-card">
-      <div class="model-card-header">
-        <div>
-          <p class="eyebrow">Model</p>
-          <h2>Transcription model</h2>
-        </div>
-        <span class="model-status ${settings.selectedReady ? "ready" : "missing"}">
-          ${settings.selectedReady ? "ready" : "needs setup"}
-        </span>
+          <p class="body">unsigned char is meant to work out of the box.</p>
+          <p class="meta">Transcription uses bundled Qwen3-ASR. If something needs manual setup, that should be fixed in the build instead of here.</p>
+        </section>
       </div>
-
-      <p class="meta">Qwen3-ASR is the default. Custom/CoreML is optional.</p>
-
-      <div class="model-source-grid">
-        <label class="model-source-option ${draft.source === "bundled" ? "active" : ""}">
-          <input type="radio" name="model-source" value="bundled" ${
-            draft.source === "bundled" ? "checked" : ""
-          } />
-          <span>
-            <strong>Qwen3-ASR</strong>
-            <small>${settings.bundledReady ? "Included · ready" : "Included · missing files"}</small>
-          </span>
-        </label>
-
-        <label class="model-source-option ${draft.source === "huggingFace" ? "active" : ""}">
-          <input type="radio" name="model-source" value="huggingFace" ${
-            draft.source === "huggingFace" ? "checked" : ""
-          } />
-          <span>
-            <strong>Custom/CoreML</strong>
-            <small>${
-              settings.huggingFaceReady
-                ? "Local snapshot · ready"
-                : draft.huggingFaceRepo.trim() || draft.huggingFaceLocalPath.trim()
-                  ? "Local snapshot · incomplete"
-                  : "Optional"
-            }</small>
-          </span>
-        </label>
-      </div>
-
-      ${sourceDetails}
-
-      <div class="model-footer">
-        <p class="meta">${escapeHtml(modelSourceSummary(settings, draft))}</p>
-        <button class="button secondary" id="save-model-settings" type="button" ${
-          state.modelBusy ? "disabled" : ""
-        }>
-          ${state.modelBusy ? "Saving..." : "Save"}
-        </button>
-      </div>
-
-      ${note}
-    </section>
-  `;
-}
-
-function renderDiarizationSection() {
-  if (!state.diarizationSettings) {
-    return `
-      <section class="model-card">
-        <div class="model-card-header">
-          <div>
-            <p class="eyebrow">Diarization</p>
-            <h2>Speaker diarization</h2>
-          </div>
-        </div>
-        <p class="meta">Loading diarization settings...</p>
-      </section>
-    `;
-  }
-
-  const settings = state.diarizationSettings;
-  const draft = state.diarizationDraft;
-  const note = state.diarizationNote
-    ? `<p class="meta model-note">${escapeHtml(state.diarizationNote)}</p>`
-    : "";
-  const tokenHint = diarizationTokenHint(settings);
-  const statusLabel = !settings.enabled ? "off" : settings.ready ? "ready" : "needs setup";
-  const statusClass = !settings.enabled ? "off" : settings.ready ? "ready" : "missing";
-  const details = draft.enabled
-    ? `
-      <div class="field-row">
-        <label class="field field-wide">
-          <span class="meta-label">Local pipeline path</span>
-          <input
-            id="pyannote-local-path"
-            class="composer-input"
-            autocomplete="off"
-            placeholder="~/.cache/huggingface/hub/models--pyannote--speaker-diarization-community-1"
-            value="${escapeHtml(draft.localPath)}"
-          />
-        </label>
-
-        <label class="field">
-          <span class="meta-label">Hugging Face token</span>
-          <input
-            id="pyannote-hf-token"
-            class="composer-input"
-            type="password"
-            autocomplete="off"
-            placeholder="${settings.huggingFaceTokenPresent ? "Leave blank to keep current token" : "Paste Hugging Face token"}"
-            value="${escapeHtml(draft.huggingFaceToken)}"
-          />
-        </label>
-      </div>
-
-      ${
-        settings.resolvedLocalPath
-          ? `
-        <div class="model-path-row">
-          <span class="meta-label">Resolved path</span>
-          <code>${escapeHtml(settings.resolvedLocalPath)}</code>
-        </div>
-      `
-          : ""
-      }
-
-      ${
-        tokenHint
-          ? `<p class="meta">${escapeHtml(tokenHint)} Leave blank to keep it.</p>`
-          : ""
-      }
-    `
-    : "";
-
-  return `
-    <section class="model-card">
-      <div class="model-card-header">
-        <div>
-          <p class="eyebrow">Diarization</p>
-          <h2>Speaker diarization</h2>
-        </div>
-        <span class="model-status ${statusClass}">
-          ${escapeHtml(statusLabel)}
-        </span>
-      </div>
-
-      <p class="meta">Optional local speaker labels with ${escapeHtml(settings.providerLabel)}.</p>
-
-      <label class="toggle-row">
-        <input id="pyannote-enabled" type="checkbox" ${draft.enabled ? "checked" : ""} />
-        <span class="toggle-copy">
-          <strong>Enable diarization</strong>
-          <small>Label who spoke when.</small>
-        </span>
-      </label>
-
-      ${details}
-
-      <div class="model-footer">
-        <p class="meta">${escapeHtml(diarizationSummary(settings, draft))}</p>
-        <button class="button secondary" id="save-diarization-settings" type="button" ${
-          state.diarizationBusy ? "disabled" : ""
-        }>
-          ${state.diarizationBusy ? "Saving..." : "Save"}
-        </button>
-      </div>
-
-      ${note}
     </section>
   `;
 }
@@ -900,10 +601,10 @@ function renderMeetingDiarizationPanel(meeting: Meeting) {
     ? `${meeting.diarizationSpeakerCount} speakers across ${meeting.diarizationSegments.length} segments · ${formatDateTime(meeting.diarizationRanAt)}`
     : diarizationEnabled
       ? "Provide an audio file for this meeting and run diarization locally."
-      : "Enable speaker diarization in Settings before running it.";
+      : "Speaker diarization is not available in this build yet.";
   const helperCopy = diarizationReady
     ? "The app runs pyannote.audio locally against the file path you provide here."
-    : settings?.status ?? "Load diarization settings to see the local runner status.";
+    : settings?.status ?? "Speaker diarization is not ready yet.";
   const pipelineSource = meeting.diarizationPipelineSource
     ? `
       <div class="model-path-row">
@@ -976,9 +677,6 @@ function renderMeetingDiarizationPanel(meeting: Meeting) {
           state.diarizationRunBusy ? "disabled" : ""
         }>
           ${state.diarizationRunBusy ? "Running..." : "Run diarization"}
-        </button>
-        <button class="button ghost" id="open-diarization-settings" type="button">
-          Settings
         </button>
       </div>
 
@@ -1282,8 +980,6 @@ function updateHomeScrollChip() {
 
 function bindViewHandlers() {
   if (isSettingsWindow) {
-    bindModelSettingsHandlers();
-    bindDiarizationSettingsHandlers();
     return;
   }
 
@@ -1489,79 +1185,6 @@ function bindViewHandlers() {
     ?.addEventListener("click", () => {
       void runMeetingDiarization();
     });
-
-  document
-    .querySelector<HTMLButtonElement>("#open-diarization-settings")
-    ?.addEventListener("click", () => {
-      void openSettingsWindow();
-    });
-}
-
-function bindModelSettingsHandlers() {
-  document
-    .querySelectorAll<HTMLInputElement>('input[name="model-source"]')
-    .forEach((input) => {
-      input.addEventListener("change", () => {
-        state.modelDraft.source = input.value === "huggingFace" ? "huggingFace" : "bundled";
-        state.modelNote = "";
-        render();
-      });
-    });
-
-  document.querySelector<HTMLInputElement>("#hf-repo")?.addEventListener("input", (event) => {
-    state.modelDraft.huggingFaceRepo = (event.currentTarget as HTMLInputElement).value;
-    state.modelNote = "";
-  });
-
-  document
-    .querySelector<HTMLInputElement>("#hf-revision")
-    ?.addEventListener("input", (event) => {
-      state.modelDraft.huggingFaceRevision = (event.currentTarget as HTMLInputElement).value;
-      state.modelNote = "";
-    });
-
-  document
-    .querySelector<HTMLInputElement>("#hf-local-path")
-    ?.addEventListener("input", (event) => {
-      state.modelDraft.huggingFaceLocalPath = (event.currentTarget as HTMLInputElement).value;
-      state.modelNote = "";
-    });
-
-  document
-    .querySelector<HTMLButtonElement>("#save-model-settings")
-    ?.addEventListener("click", () => {
-      void saveModelSettings();
-    });
-}
-
-function bindDiarizationSettingsHandlers() {
-  document
-    .querySelector<HTMLInputElement>("#pyannote-enabled")
-    ?.addEventListener("change", (event) => {
-      state.diarizationDraft.enabled = (event.currentTarget as HTMLInputElement).checked;
-      state.diarizationNote = "";
-      render();
-    });
-
-  document
-    .querySelector<HTMLInputElement>("#pyannote-local-path")
-    ?.addEventListener("input", (event) => {
-      state.diarizationDraft.localPath = (event.currentTarget as HTMLInputElement).value;
-      state.diarizationNote = "";
-    });
-
-  document
-    .querySelector<HTMLInputElement>("#pyannote-hf-token")
-    ?.addEventListener("input", (event) => {
-      state.diarizationDraft.huggingFaceToken = (event.currentTarget as HTMLInputElement).value;
-      state.diarizationNote = "";
-    });
-
-  document
-    .querySelector<HTMLButtonElement>("#save-diarization-settings")
-    ?.addEventListener("click", () => {
-      void saveDiarizationSettings();
-    });
 }
 
 async function refreshPermissions(silent = false) {
@@ -1700,15 +1323,13 @@ async function ensureDiarizationReady() {
   }
 
   if (!state.diarizationSettings.enabled) {
-    await openSettingsWindow();
-    throw new Error("Enable speaker diarization in Settings before running it.");
+    throw new Error("Speaker diarization is not available in this build yet.");
   }
 
   if (state.diarizationSettings.ready) {
     return;
   }
 
-  await openSettingsWindow();
   throw new Error(state.diarizationSettings.status);
 }
 
@@ -1756,69 +1377,6 @@ async function runMeetingDiarization() {
     state.meetingNote = error instanceof Error ? error.message : String(error);
   } finally {
     state.diarizationRunBusy = false;
-    render();
-  }
-}
-
-async function saveModelSettings() {
-  if (state.modelBusy) {
-    return;
-  }
-
-  state.modelBusy = true;
-  state.modelNote = "";
-  render();
-
-  try {
-    const settings = await invoke<ModelSettings>("save_model_settings", {
-      settings: {
-        source: state.modelDraft.source,
-        huggingFaceRepo: state.modelDraft.huggingFaceRepo,
-        huggingFaceRevision: state.modelDraft.huggingFaceRevision,
-        huggingFaceLocalPath: state.modelDraft.huggingFaceLocalPath,
-      },
-    });
-
-    state.modelSettings = settings;
-    syncModelDraft(settings);
-    state.modelNote = settings.selectedReady
-      ? `Saved. Using ${settings.selectedReference ?? "the selected model"}.`
-      : "Saved, but the selected model is not ready yet.";
-  } catch (error) {
-    state.modelNote = `Model save failed: ${String(error)}`;
-  } finally {
-    state.modelBusy = false;
-    render();
-  }
-}
-
-async function saveDiarizationSettings() {
-  if (state.diarizationBusy) {
-    return;
-  }
-
-  state.diarizationBusy = true;
-  state.diarizationNote = "";
-  render();
-
-  try {
-    const settings = await invoke<DiarizationSettings>("save_diarization_settings", {
-      settings: {
-        enabled: state.diarizationDraft.enabled,
-        localPath: state.diarizationDraft.localPath,
-        huggingFaceToken: state.diarizationDraft.huggingFaceToken,
-      },
-    });
-
-    state.diarizationSettings = settings;
-    syncDiarizationDraft(settings);
-    state.diarizationNote = settings.ready
-      ? `Saved. ${settings.providerLabel} is ready when diarization is enabled.`
-      : "Saved, but speaker diarization still needs setup.";
-  } catch (error) {
-    state.diarizationNote = `Diarization save failed: ${String(error)}`;
-  } finally {
-    state.diarizationBusy = false;
     render();
   }
 }
