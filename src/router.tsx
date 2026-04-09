@@ -16,7 +16,6 @@ import {
   appStore,
   currentSetupBannerContent,
   formatClockSeconds,
-  formatDate,
   formatDateTime,
   getMeetingTranscriptLines,
   getTimezoneOptions,
@@ -594,13 +593,6 @@ function HomeScreen() {
         ) : (
           <div className="space-y-3">
             {meetings.map((meeting) => {
-              const livePreview =
-                snapshot.recordingMeetingId === meeting.id
-                  ? snapshot.liveTranscriptText.trim()
-                  : "";
-              const preview =
-                livePreview || meeting.transcript[meeting.transcript.length - 1] || "No transcript yet";
-              const lineCount = meeting.transcript.length + (livePreview ? 1 : 0);
               const deleteDisabled =
                 snapshot.transcriptionBusy ||
                 snapshot.recordingMeetingId === meeting.id ||
@@ -650,17 +642,11 @@ function HomeScreen() {
                   }}
                 >
                   <Surface className="p-4 transition hover:-translate-y-px">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-zinc-950">
-                          {meeting.title}
-                        </h2>
-                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-zinc-600">{preview}</p>
-                        <p className="mt-3 text-xs uppercase tracking-[0.12em] text-zinc-500">
-                          {formatDate(meeting.updatedAt)} · {lineCount} lines
-                        </p>
-                      </div>
-                      <StatusBadge tone={meeting.status}>{meeting.status}</StatusBadge>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-zinc-950">
+                        {meeting.title}
+                      </h2>
+                      <p className="mt-2 text-sm text-zinc-600">{formatDateTime(meeting.createdAt)}</p>
                     </div>
                   </Surface>
                 </button>
