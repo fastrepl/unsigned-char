@@ -305,7 +305,7 @@ h2 {
 }
 
 .button:disabled {
-  cursor: default;
+  cursor: not-allowed;
   opacity: 0.55;
   transform: none;
   box-shadow: none;
@@ -719,6 +719,7 @@ h2 {
   width: 100%;
   padding: 16px;
   text-align: left;
+  cursor: pointer;
 }
 
 .meeting-row:hover {
