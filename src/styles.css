@@ -287,6 +287,24 @@ h2 {
   border-color: #27272a;
 }
 
+.shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  font-family:
+    ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Monaco, Consolas,
+    monospace;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .button.secondary {
   background: var(--surface-soft);
 }

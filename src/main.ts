@@ -32,6 +32,8 @@ type MarkdownExport = {
 };
 
 const STORE_KEY = "unsigned-char-meetings";
+const isMacLike = /Mac|iPhone|iPad|iPod/.test(window.navigator.userAgent);
+const NEW_MEETING_SHORTCUT = isMacLike ? "⌘N" : "Ctrl+N";
 const appRoot: HTMLElement = (() => {
   const node = document.querySelector<HTMLElement>("#app");
   if (!node) {
@@ -169,12 +171,17 @@ function handleWindowKeydown(event: KeyboardEvent) {
   if (
     event.defaultPrevented ||
     event.isComposing ||
-    !event.metaKey ||
-    event.ctrlKey ||
     event.altKey ||
     event.shiftKey ||
     event.key.toLowerCase() !== "n"
   ) {
+    return;
+  }
+
+  const usesPrimaryModifier = isMacLike
+    ? event.metaKey && !event.ctrlKey
+    : event.ctrlKey && !event.metaKey;
+  if (!usesPrimaryModifier) {
     return;
   }
 
@@ -225,7 +232,8 @@ function renderHome() {
     <section class="screen home">
       <header class="screen-header screen-header-row home-header">
         <button class="button primary header-action" id="new-meeting" type="button">
-          ${state.startMeetingBusy ? "Starting..." : "New meeting"}
+          <span>${state.startMeetingBusy ? "Starting..." : "New meeting"}</span>
+          <kbd class="shortcut-hint" aria-hidden="true">${NEW_MEETING_SHORTCUT}</kbd>
         </button>
       </header>
 
