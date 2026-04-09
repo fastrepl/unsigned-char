@@ -25,7 +25,6 @@ import {
   sortedMeetings,
   useAppState,
 } from "./store";
-import { showNativeContextMenu } from "./hooks/useNativeContextMenu";
 
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -601,10 +600,6 @@ function HomeScreen() {
               const preview =
                 livePreview || meeting.transcript[meeting.transcript.length - 1] || "No transcript yet";
               const lineCount = meeting.transcript.length + (livePreview ? 1 : 0);
-              const deleteDisabled =
-                snapshot.transcriptionBusy ||
-                snapshot.recordingMeetingId === meeting.id ||
-                meeting.status === "live";
 
               return (
                 <button
@@ -616,37 +611,6 @@ function HomeScreen() {
                       to: "/meeting/$meetingId",
                       params: { meetingId: meeting.id },
                     });
-                  }}
-                  onContextMenu={(event) => {
-                    void showNativeContextMenu(
-                      [
-                        {
-                          id: `show-meeting-in-finder-${meeting.id}`,
-                          text: "Show in Finder",
-                          action: () => {
-                            void appStore.revealMeetingExportInFinder(meeting.id);
-                          },
-                        },
-                        { separator: true },
-                        {
-                          id: `delete-meeting-${meeting.id}`,
-                          text: "Delete meeting",
-                          disabled: deleteDisabled,
-                          action: () => {
-                            if (
-                              !window.confirm(
-                                `Delete "${meeting.title}" from unsigned char? This also removes its saved markdown export.`,
-                              )
-                            ) {
-                              return;
-                            }
-
-                            void appStore.deleteMeeting(meeting.id);
-                          },
-                        },
-                      ],
-                      event,
-                    );
                   }}
                 >
                   <Surface className="p-4 transition hover:-translate-y-px">
