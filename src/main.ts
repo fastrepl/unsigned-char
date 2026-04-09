@@ -165,6 +165,23 @@ function formatDate(iso: string) {
   });
 }
 
+function handleWindowKeydown(event: KeyboardEvent) {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    !event.metaKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.shiftKey ||
+    event.key.toLowerCase() !== "n"
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  void startMeeting();
+}
+
 function renderHome() {
   const items = sortedMeetings();
   const note = state.permissionNote
@@ -492,5 +509,6 @@ async function saveMeetingAsMarkdown(meeting: Meeting) {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  window.addEventListener("keydown", handleWindowKeydown);
   await refreshPermissions();
 });
