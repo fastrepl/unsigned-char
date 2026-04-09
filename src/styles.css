@@ -488,11 +488,12 @@ h2 {
 .settings-screen {
   height: auto;
   min-height: 100%;
+  padding-bottom: 24px;
 }
 
 .model-card {
-  padding: 18px;
-  gap: 14px;
+  padding: 16px;
+  gap: 12px;
 }
 
 .model-card-header,
@@ -554,6 +555,13 @@ h2 {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface-muted);
+  cursor: pointer;
+}
+
+.model-source-option.active {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .model-source-option input {

@@ -582,6 +582,69 @@ function renderSettingsWindow() {
   `;
 }
 
+function modelSourceSummary(settings: ModelSettings, draft: ModelDraft) {
+  if (draft.source === "bundled") {
+    return settings.bundledReady
+      ? "Using bundled Qwen3-ASR."
+      : "Bundled Qwen3-ASR is missing files.";
+  }
+
+  if (settings.huggingFaceReady) {
+    return "Using a custom snapshot.";
+  }
+
+  if (!draft.huggingFaceRepo.trim()) {
+    return "Add a model repo or URL.";
+  }
+
+  if (!draft.huggingFaceLocalPath.trim()) {
+    return "Add a local snapshot path.";
+  }
+
+  return "Snapshot folder is missing required model files.";
+}
+
+function diarizationSummary(settings: DiarizationSettings, draft: DiarizationDraft) {
+  if (!draft.enabled) {
+    return "Off until you enable it.";
+  }
+
+  if (settings.localReady) {
+    return "Local pipeline is ready.";
+  }
+
+  if (settings.huggingFaceTokenPresent) {
+    return "Ready to download the pipeline when needed.";
+  }
+
+  if (draft.localPath.trim()) {
+    return "Verify the local pipeline path or add a token.";
+  }
+
+  return "Add a local pipeline path or Hugging Face token.";
+}
+
+function diarizationTokenHint(settings: DiarizationSettings) {
+  const source = settings.huggingFaceTokenSourceLabel;
+  if (!source) {
+    return "";
+  }
+
+  if (source.includes("saved locally")) {
+    return "Token saved in app config.";
+  }
+
+  if (source.includes("HF_TOKEN")) {
+    return "Using HF_TOKEN from the environment.";
+  }
+
+  if (source.includes("HUGGINGFACE_TOKEN")) {
+    return "Using HUGGINGFACE_TOKEN from the environment.";
+  }
+
+  return source;
+}
+
 function renderModelSection() {
   if (!state.modelSettings) {
     return `
@@ -599,11 +662,68 @@ function renderModelSection() {
 
   const settings = state.modelSettings;
   const draft = state.modelDraft;
-  const pendingStatus =
-    draft.source === "bundled" ? settings.bundledStatus : settings.huggingFaceStatus;
   const note = state.modelNote
     ? `<p class="meta model-note">${escapeHtml(state.modelNote)}</p>`
     : "";
+  const huggingFaceResolvedPath = settings.huggingFaceResolvedPath ?? draft.huggingFaceLocalPath.trim();
+  const showBundledLocation = draft.source === "bundled" && !settings.bundledReady;
+  const sourceDetails =
+    draft.source === "bundled"
+      ? showBundledLocation
+        ? `
+        <div class="model-path-row">
+          <span class="meta-label">Location</span>
+          <code>${escapeHtml(settings.bundledResolvedPath)}</code>
+        </div>
+      `
+        : ""
+      : `
+        <div class="field-row">
+          <label class="field field-wide">
+            <span class="meta-label">Repo or URL</span>
+            <input
+              id="hf-repo"
+              class="composer-input"
+              autocomplete="off"
+              placeholder="Qwen/Qwen3-ASR-0.6B"
+              value="${escapeHtml(draft.huggingFaceRepo)}"
+            />
+          </label>
+
+          <label class="field">
+            <span class="meta-label">Revision</span>
+            <input
+              id="hf-revision"
+              class="composer-input"
+              autocomplete="off"
+              placeholder="main"
+              value="${escapeHtml(draft.huggingFaceRevision)}"
+            />
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="meta-label">Local snapshot</span>
+          <input
+            id="hf-local-path"
+            class="composer-input"
+            autocomplete="off"
+            placeholder="~/models/qwen-asr"
+            value="${escapeHtml(draft.huggingFaceLocalPath)}"
+          />
+        </label>
+
+        ${
+          huggingFaceResolvedPath
+            ? `
+          <div class="model-path-row">
+            <span class="meta-label">Resolved path</span>
+            <code>${escapeHtml(huggingFaceResolvedPath)}</code>
+          </div>
+        `
+            : ""
+        }
+      `;
 
   return `
     <section class="model-card">
@@ -617,78 +737,44 @@ function renderModelSection() {
         </span>
       </div>
 
-      <p class="meta">
-        Packaged builds resolve the bundled Qwen3-ASR model from the app bundle. Save changes to switch the app to a local Hugging Face snapshot.
-      </p>
+      <p class="meta">Qwen3-ASR is the default. Custom/CoreML is optional.</p>
 
       <div class="model-source-grid">
-        <label class="model-source-option">
+        <label class="model-source-option ${draft.source === "bundled" ? "active" : ""}">
           <input type="radio" name="model-source" value="bundled" ${
             draft.source === "bundled" ? "checked" : ""
           } />
           <span>
-            <strong>${escapeHtml(settings.bundledLabel)}</strong>
-            <small>${escapeHtml(settings.bundledStatus)}</small>
+            <strong>Qwen3-ASR</strong>
+            <small>${settings.bundledReady ? "Included · ready" : "Included · missing files"}</small>
           </span>
         </label>
 
-        <label class="model-source-option">
+        <label class="model-source-option ${draft.source === "huggingFace" ? "active" : ""}">
           <input type="radio" name="model-source" value="huggingFace" ${
             draft.source === "huggingFace" ? "checked" : ""
           } />
           <span>
-            <strong>Hugging Face</strong>
-            <small>${escapeHtml(settings.huggingFaceStatus)}</small>
+            <strong>Custom/CoreML</strong>
+            <small>${
+              settings.huggingFaceReady
+                ? "Local snapshot · ready"
+                : draft.huggingFaceRepo.trim() || draft.huggingFaceLocalPath.trim()
+                  ? "Local snapshot · incomplete"
+                  : "Optional"
+            }</small>
           </span>
         </label>
       </div>
 
-      <div class="model-path-row">
-        <span class="meta-label">Bundled path</span>
-        <code>${escapeHtml(settings.bundledResolvedPath)}</code>
-      </div>
-
-      <label class="field">
-        <span class="meta-label">Hugging Face repo or URL</span>
-        <input
-          id="hf-repo"
-          class="composer-input"
-          autocomplete="off"
-          placeholder="Qwen/Qwen3-ASR-0.6B"
-          value="${escapeHtml(draft.huggingFaceRepo)}"
-        />
-      </label>
-
-      <div class="field-row">
-        <label class="field">
-          <span class="meta-label">Revision</span>
-          <input
-            id="hf-revision"
-            class="composer-input"
-            autocomplete="off"
-            placeholder="main"
-            value="${escapeHtml(draft.huggingFaceRevision)}"
-          />
-        </label>
-
-        <label class="field field-wide">
-          <span class="meta-label">Local snapshot path</span>
-          <input
-            id="hf-local-path"
-            class="composer-input"
-            autocomplete="off"
-            placeholder="~/models/qwen-asr"
-            value="${escapeHtml(draft.huggingFaceLocalPath)}"
-          />
-        </label>
-      </div>
+      ${sourceDetails}
 
       <div class="model-footer">
-        <p class="meta">${escapeHtml(pendingStatus)}</p>
+        <p class="meta">${escapeHtml(modelSourceSummary(settings, draft))}</p>
         <button class="button secondary" id="save-model-settings" type="button" ${
           state.modelBusy ? "disabled" : ""
         }>
-          ${state.modelBusy ? "Saving..." : "Save model"}
+          ${state.modelBusy ? "Saving..." : "Save"}
         </button>
       </div>
 
@@ -717,12 +803,54 @@ function renderDiarizationSection() {
   const note = state.diarizationNote
     ? `<p class="meta model-note">${escapeHtml(state.diarizationNote)}</p>`
     : "";
-  const tokenSource = settings.huggingFaceTokenSourceLabel
-    ? `<p class="meta">${escapeHtml(settings.huggingFaceTokenSourceLabel)} Leave the field blank to keep the current token.</p>`
-    : '<p class="meta">Paste a Hugging Face access token if pyannote.audio should download the community-1 pipeline locally.</p>';
+  const tokenHint = diarizationTokenHint(settings);
   const statusLabel = !settings.enabled ? "off" : settings.ready ? "ready" : "needs setup";
   const statusClass = !settings.enabled ? "off" : settings.ready ? "ready" : "missing";
-  const resolvedPath = settings.resolvedLocalPath ?? "No local pipeline path configured.";
+  const details = draft.enabled
+    ? `
+      <div class="field-row">
+        <label class="field field-wide">
+          <span class="meta-label">Local pipeline path</span>
+          <input
+            id="pyannote-local-path"
+            class="composer-input"
+            autocomplete="off"
+            placeholder="~/.cache/huggingface/hub/models--pyannote--speaker-diarization-community-1"
+            value="${escapeHtml(draft.localPath)}"
+          />
+        </label>
+
+        <label class="field">
+          <span class="meta-label">Hugging Face token</span>
+          <input
+            id="pyannote-hf-token"
+            class="composer-input"
+            type="password"
+            autocomplete="off"
+            placeholder="${settings.huggingFaceTokenPresent ? "Leave blank to keep current token" : "Paste Hugging Face token"}"
+            value="${escapeHtml(draft.huggingFaceToken)}"
+          />
+        </label>
+      </div>
+
+      ${
+        settings.resolvedLocalPath
+          ? `
+        <div class="model-path-row">
+          <span class="meta-label">Resolved path</span>
+          <code>${escapeHtml(settings.resolvedLocalPath)}</code>
+        </div>
+      `
+          : ""
+      }
+
+      ${
+        tokenHint
+          ? `<p class="meta">${escapeHtml(tokenHint)} Leave blank to keep it.</p>`
+          : ""
+      }
+    `
+    : "";
 
   return `
     <section class="model-card">
@@ -736,61 +864,24 @@ function renderDiarizationSection() {
         </span>
       </div>
 
-      <p class="meta">
-        ${escapeHtml(settings.providerLabel)} runs locally through Python. The app is configured for the open-source community-1 speaker diarization pipeline.
-      </p>
+      <p class="meta">Optional local speaker labels with ${escapeHtml(settings.providerLabel)}.</p>
 
       <label class="toggle-row">
         <input id="pyannote-enabled" type="checkbox" ${draft.enabled ? "checked" : ""} />
         <span class="toggle-copy">
-          <strong>Enable speaker diarization</strong>
-          <small>Use local pyannote.audio diarization to identify who spoke when.</small>
+          <strong>Enable diarization</strong>
+          <small>Label who spoke when.</small>
         </span>
       </label>
 
-      <div class="model-path-row">
-        <span class="meta-label">Pipeline</span>
-        <code>${escapeHtml(settings.pipelineRepo)}</code>
-      </div>
-
-      <div class="model-path-row">
-        <span class="meta-label">Resolved local path</span>
-        <code>${escapeHtml(resolvedPath)}</code>
-      </div>
-
-      <div class="field-row">
-        <label class="field field-wide">
-          <span class="meta-label">Local pipeline path</span>
-          <input
-            id="pyannote-local-path"
-            class="composer-input"
-            autocomplete="off"
-            placeholder="~/.cache/huggingface/hub/models--pyannote--speaker-diarization-community-1"
-            value="${escapeHtml(draft.localPath)}"
-          />
-        </label>
-
-        <label class="field field-wide">
-          <span class="meta-label">Hugging Face access token</span>
-          <input
-            id="pyannote-hf-token"
-            class="composer-input"
-            type="password"
-            autocomplete="off"
-            placeholder="${settings.huggingFaceTokenPresent ? "Leave blank to keep current token" : "Paste Hugging Face token"}"
-            value="${escapeHtml(draft.huggingFaceToken)}"
-          />
-        </label>
-      </div>
-
-      ${tokenSource}
+      ${details}
 
       <div class="model-footer">
-        <p class="meta">${escapeHtml(settings.status)}</p>
+        <p class="meta">${escapeHtml(diarizationSummary(settings, draft))}</p>
         <button class="button secondary" id="save-diarization-settings" type="button" ${
           state.diarizationBusy ? "disabled" : ""
         }>
-          ${state.diarizationBusy ? "Saving..." : "Save diarization"}
+          ${state.diarizationBusy ? "Saving..." : "Save"}
         </button>
       </div>
 
