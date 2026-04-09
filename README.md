@@ -93,6 +93,24 @@ From the Settings window you can:
 3. When the app opens, finish the permission onboarding before using the rest of
    the app.
 
+## CLI
+
+This package exposes a `uchar` command in the same spirit as
+[`char`](https://cli.char.com/):
+
+```bash
+npx unsigned-char
+```
+
+Or, after a global install:
+
+```bash
+uchar
+```
+
+On macOS, the command tries to open the installed app first and then falls back
+to local debug or release bundles under `src-tauri/target/...`.
+
 ## Note for development
 
 Shout out to [fastrepl/char](https://github.com/fastrepl/char). It already

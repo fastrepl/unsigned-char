@@ -2,6 +2,9 @@
   "name": "unsigned-char",
   "private": true,
   "version": "0.1.0",
+  "bin": {
+    "uchar": "./bin/uchar.mjs"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
