@@ -14,11 +14,19 @@
     "tauri:debug-app": "tauri build --debug && open 'src-tauri/target/debug/bundle/macos/unsigned char.app'"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2"
+    "@tanstack/react-router": "^1.168.10",
+    "@tauri-apps/api": "^2",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2",
-    "vite": "^6.0.3",
-    "typescript": "~5.6.2"
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~5.6.2",
+    "vite": "^8.0.8"
   }
 }

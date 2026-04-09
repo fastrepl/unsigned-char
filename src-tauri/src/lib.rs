@@ -781,7 +781,7 @@ fn show_settings_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::
     let builder = WebviewWindowBuilder::new(
         app,
         SETTINGS_WINDOW_LABEL,
-        WebviewUrl::App("index.html".into()),
+        WebviewUrl::App("index.html#/settings".into()),
     )
     .title("Settings")
     .inner_size(560.0, 540.0)
