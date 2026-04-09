@@ -202,35 +202,6 @@ h2 {
 
 .meeting-row-top {
   align-items: center;
-  justify-content: space-between;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-soft);
-  color: var(--text-soft);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: capitalize;
-}
-
-.status-badge.live {
-  color: var(--accent-foreground);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.status-badge.done {
-  color: var(--success);
-  background: var(--success-soft);
-  border-color: rgba(4, 120, 87, 0.12);
 }
 
 .button,

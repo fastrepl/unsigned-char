@@ -265,7 +265,6 @@ function renderHome() {
                   <div class="meeting-row-copy">
                     <div class="meeting-row-top">
                       <h2>${escapeHtml(meeting.title)}</h2>
-                      <span class="status-badge ${meeting.status}">${meeting.status}</span>
                     </div>
                     <p class="meeting-preview">${escapeHtml(preview)}</p>
                     <p class="meeting-meta">
@@ -461,7 +460,6 @@ function renderMeeting() {
             />
           </h1>
           <p class="meeting-subtitle">
-            <span class="status-badge ${meeting.status}">${meeting.status}</span>
             <span>${formatTime(meeting.createdAt)}</span>
           </p>
         </div>
