@@ -1026,7 +1026,6 @@ function renderMeeting() {
           </button>
         </div>
         <div class="meeting-heading">
-          <p class="eyebrow">Meeting</p>
           <h1 class="meeting-title">
             <input
               id="meeting-title-input"
@@ -1038,7 +1037,6 @@ function renderMeeting() {
             />
           </h1>
           <p class="meeting-subtitle">
-            <span class="status-badge ${meeting.status}">${meeting.status}</span>
             <span>${formatTime(meeting.createdAt)}</span>
           </p>
         </div>
