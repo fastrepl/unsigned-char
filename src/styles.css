@@ -288,20 +288,16 @@ h2 {
 }
 
 .shortcut-hint {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  padding: 3px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.14);
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: inherit;
-  font-family:
-    ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Monaco, Consolas,
-    monospace;
+  opacity: 0.64;
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   line-height: 1;
 }
 
@@ -316,6 +312,9 @@ h2 {
 
 .header-action {
   flex-shrink: 0;
+  min-width: 192px;
+  justify-content: space-between;
+  padding-inline: 16px;
 }
 
 .home-note {
