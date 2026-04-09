@@ -432,14 +432,6 @@ function renderSettingsWindow() {
   return `
     <section class="settings-shell">
       <div class="screen settings-screen">
-        <header class="screen-header screen-header-copy">
-          <p class="eyebrow">Settings</p>
-          <h1>Transcription</h1>
-          <p class="body">
-            Choose the bundled Qwen ASR model, point the app at a local Hugging Face snapshot, and configure local pyannote.audio speaker diarization.
-          </p>
-        </header>
-
         ${renderModelSection()}
         ${renderDiarizationSection()}
       </div>
