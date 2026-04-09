@@ -2386,6 +2386,7 @@ function handleAppFocus() {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  document.body.dataset.windowKind = isSettingsWindow ? "settings" : "main";
   render();
   window.addEventListener("keydown", handleWindowKeydown);
   if (isSettingsWindow) {
