@@ -25,14 +25,6 @@ type Meeting = {
   exportPath: string | null;
 };
 
-type MarkdownExport = {
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  status: MeetingStatus;
-  transcript: string;
-};
-
 type ModelSettings = {
   source: ModelSource;
   bundledLabel: string;
@@ -105,7 +97,6 @@ const state = {
   diarizationBusy: false,
   diarizationNote: "",
   startMeetingBusy: false,
-  saveBusy: false,
   meetingNote: "",
   homeScrollTop: 0,
 };
@@ -729,11 +720,6 @@ function renderMeeting() {
               `
           }
         </button>
-        <button class="button secondary" id="save-markdown" type="button" ${
-          state.saveBusy ? "disabled" : ""
-        }>
-          ${state.saveBusy ? "Saving..." : "Save .md"}
-        </button>
       </div>
 
       <section class="transcript-panel" id="transcript-panel">
@@ -867,17 +853,6 @@ function bindViewHandlers() {
       }));
       state.meetingNote = "";
       render();
-    });
-
-  document
-    .querySelector<HTMLButtonElement>("#save-markdown")
-    ?.addEventListener("click", () => {
-      const currentMeeting = getActiveMeeting();
-      if (!currentMeeting) {
-        return;
-      }
-
-      void saveMeetingAsMarkdown(currentMeeting);
     });
 
   document
@@ -1212,35 +1187,6 @@ async function saveDiarizationSettings() {
     state.diarizationNote = `Diarization save failed: ${String(error)}`;
   } finally {
     state.diarizationBusy = false;
-    render();
-  }
-}
-
-async function saveMeetingAsMarkdown(meeting: Meeting) {
-  state.saveBusy = true;
-  state.meetingNote = "";
-  render();
-
-  const exportPayload: MarkdownExport = {
-    title: meeting.title,
-    createdAt: meeting.createdAt,
-    updatedAt: meeting.updatedAt,
-    status: meeting.status,
-    transcript: meeting.transcript.join("\n\n"),
-  };
-
-  try {
-    const path = await invoke<string>("save_meeting_markdown", { export: exportPayload });
-    updateMeeting(meeting.id, (current) => ({
-      ...current,
-      exportPath: path,
-      updatedAt: new Date().toISOString(),
-    }));
-    state.meetingNote = `Saved to ${path}`;
-  } catch (error) {
-    state.meetingNote = `Save failed: ${String(error)}`;
-  } finally {
-    state.saveBusy = false;
     render();
   }
 }
