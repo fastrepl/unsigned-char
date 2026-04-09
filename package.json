@@ -16,6 +16,7 @@
   "dependencies": {
     "@tanstack/react-router": "^1.168.10",
     "@tauri-apps/api": "^2",
+    "lucide-react": "^1.7.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },

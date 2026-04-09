@@ -8,6 +8,7 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
+import { ChevronDown, ChevronLeft } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useMemo, useState } from "react";
 
 import {
@@ -31,31 +32,11 @@ function cn(...values: Array<string | false | null | undefined>) {
 }
 
 function IconChevronDown() {
-  return (
-    <svg className="size-4 opacity-60" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M4 6.5 8 10.5l4-4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ChevronDown className="size-4 opacity-60" strokeWidth={1.5} aria-hidden="true" />;
 }
 
 function IconBack() {
-  return (
-    <svg className="size-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M10.5 3.5 6 8l4.5 4.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ChevronLeft className="size-4" strokeWidth={1.5} aria-hidden="true" />;
 }
 
 function IconClose() {
