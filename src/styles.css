@@ -628,6 +628,12 @@ h2 {
   height: auto;
   min-height: 100%;
   padding-bottom: 24px;
+  background: var(--surface-muted);
+  backdrop-filter: blur(36px) saturate(1.24);
+  -webkit-backdrop-filter: blur(36px) saturate(1.24);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.22),
+    inset -1px 0 0 rgba(255, 255, 255, 0.12);
 }
 
 .settings-simple {
