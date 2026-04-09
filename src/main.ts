@@ -682,13 +682,27 @@ function formatSpeakerTurnsMarkdown(meeting: Meeting) {
 }
 
 function handleWindowKeydown(event: KeyboardEvent) {
-  if (
-    event.defaultPrevented ||
-    event.isComposing ||
-    event.altKey ||
-    event.shiftKey ||
-    event.key.toLowerCase() !== "n"
-  ) {
+  if (event.defaultPrevented || event.isComposing) {
+    return;
+  }
+
+  if (isSettingsWindow) {
+    if (
+      event.key !== "Escape" ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    void currentWindow.close();
+    return;
+  }
+
+  if (event.altKey || event.shiftKey || event.key.toLowerCase() !== "n") {
     return;
   }
 
@@ -2112,6 +2126,7 @@ function handleAppFocus() {
 window.addEventListener("DOMContentLoaded", async () => {
   render();
   await ensureWindowAlwaysOnTop();
+  window.addEventListener("keydown", handleWindowKeydown);
   if (isSettingsWindow) {
     await Promise.all([
       refreshGeneralSettings(true),
@@ -2122,7 +2137,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   queueLoadedMeetingMarkdownSync();
-  window.addEventListener("keydown", handleWindowKeydown);
   window.addEventListener("focus", handleAppFocus);
   await Promise.all([
     refreshGeneralSettings(true),
