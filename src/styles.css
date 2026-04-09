@@ -411,6 +411,23 @@ h2 {
   font-size: 12px;
 }
 
+.meeting-title {
+  min-width: 0;
+}
+
+.meeting-title-input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  outline: none;
+  appearance: none;
+}
+
 .meeting-actions {
   flex-wrap: wrap;
 }

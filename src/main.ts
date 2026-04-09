@@ -144,6 +144,10 @@ function buildMeetingTitle(iso: string) {
   return `Meeting ${datePart} ${timePart}`;
 }
 
+function normalizeMeetingTitle(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -283,7 +287,16 @@ function renderMeeting() {
         <button class="back-button" id="back-home" type="button">Back</button>
         <div class="meeting-heading">
           <p class="eyebrow">Meeting</p>
-          <h1>${escapeHtml(meeting.title)}</h1>
+          <h1 class="meeting-title">
+            <input
+              id="meeting-title-input"
+              class="meeting-title-input"
+              type="text"
+              value="${escapeHtml(meeting.title)}"
+              aria-label="Meeting title"
+              spellcheck="false"
+            />
+          </h1>
           <p class="meeting-subtitle">
             <span class="status-badge ${meeting.status}">${meeting.status}</span>
             <span>${formatTime(meeting.createdAt)}</span>
@@ -385,7 +398,12 @@ function bindViewHandlers() {
   document
     .querySelector<HTMLButtonElement>("#save-markdown")
     ?.addEventListener("click", () => {
-      void saveMeetingAsMarkdown(meeting);
+      const currentMeeting = getActiveMeeting();
+      if (!currentMeeting) {
+        return;
+      }
+
+      void saveMeetingAsMarkdown(currentMeeting);
     });
 
   document
@@ -406,6 +424,54 @@ function bindViewHandlers() {
       state.meetingNote = "";
       render();
     });
+
+  const titleInput = document.querySelector<HTMLInputElement>("#meeting-title-input");
+  const commitTitle = () => {
+    const currentMeeting = getActiveMeeting();
+    if (!titleInput || !currentMeeting) {
+      return;
+    }
+
+    const title = normalizeMeetingTitle(titleInput.value);
+    if (!title) {
+      titleInput.value = currentMeeting.title;
+      return;
+    }
+
+    if (title === currentMeeting.title) {
+      titleInput.value = currentMeeting.title;
+      return;
+    }
+
+    updateMeeting(currentMeeting.id, (current) => ({
+      ...current,
+      title,
+      updatedAt: new Date().toISOString(),
+    }));
+    titleInput.value = title;
+  };
+
+  titleInput?.addEventListener("change", commitTitle);
+  titleInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      titleInput.blur();
+      return;
+    }
+
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    const currentMeeting = getActiveMeeting();
+    if (!currentMeeting) {
+      return;
+    }
+
+    event.preventDefault();
+    titleInput.value = currentMeeting.title;
+    titleInput.blur();
+  });
 }
 
 async function refreshPermissions(silent = false) {
