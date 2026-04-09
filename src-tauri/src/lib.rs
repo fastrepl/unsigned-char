@@ -141,6 +141,11 @@ fn open_permission_settings(permission: PermissionKind) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_settings_window<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+    show_settings_window(&app).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn model_settings_state<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<ModelSettingsState, String> {
@@ -288,7 +293,7 @@ fn build_app_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result
     )
 }
 
-fn open_settings_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
+fn show_settings_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
         let _ = window.unminimize();
         window.show()?;
@@ -683,13 +688,14 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             if event.id() == OPEN_SETTINGS_MENU_ID {
-                let _ = open_settings_window(app);
+                let _ = show_settings_window(app);
             }
         })
         .invoke_handler(tauri::generate_handler![
             onboarding_state,
             request_permission,
             open_permission_settings,
+            open_settings_window,
             model_settings_state,
             save_model_settings,
             save_meeting_markdown

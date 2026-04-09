@@ -275,6 +275,7 @@ h2 {
 .back-button:focus-visible,
 .composer-input:focus-visible,
 .meeting-row:focus-visible,
+.setup-banner:focus-visible,
 .scroll-top-chip:focus-visible {
   outline: none;
   border-color: var(--border-strong);
@@ -329,6 +330,63 @@ h2 {
   min-width: 192px;
   justify-content: space-between;
   padding-inline: 16px;
+}
+
+.setup-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(24, 24, 27, 0.06), rgba(24, 24, 27, 0.02)),
+    var(--surface);
+  color: var(--text);
+  text-align: left;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.setup-banner:hover {
+  border-color: var(--border-strong);
+  background:
+    linear-gradient(135deg, rgba(24, 24, 27, 0.08), rgba(24, 24, 27, 0.03)),
+    var(--surface);
+  transform: translateY(-1px);
+}
+
+.setup-banner-kicker,
+.setup-banner-action {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.setup-banner-kicker {
+  color: var(--text-faint);
+}
+
+.setup-banner-title {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.setup-banner-copy {
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.setup-banner-action {
+  color: var(--text);
 }
 
 .scroll-top-chip {
@@ -492,6 +550,7 @@ h2 {
   .back-button:focus-visible,
   .composer-input:focus-visible,
   .meeting-row:focus-visible,
+  .setup-banner:focus-visible,
   .scroll-top-chip:focus-visible {
     box-shadow:
       0 0 0 3px rgba(255, 255, 255, 0.08),
@@ -509,6 +568,18 @@ h2 {
 
   .model-source-option {
     background: #131416;
+  }
+
+  .setup-banner {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+      var(--surface);
+  }
+
+  .setup-banner:hover {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04)),
+      var(--surface);
   }
 
   .scroll-top-chip:hover {

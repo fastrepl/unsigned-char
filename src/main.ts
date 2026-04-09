@@ -241,11 +241,51 @@ function handleWindowKeydown(event: KeyboardEvent) {
   }
 
   event.preventDefault();
+
+  if (requiresModelSetup()) {
+    void openSettingsWindow();
+    return;
+  }
+
   void startMeeting();
+}
+
+function requiresModelSetup() {
+  return Boolean(state.modelSettings && !state.modelSettings.selectedReady);
+}
+
+function selectedModelStatus(settings: ModelSettings) {
+  return settings.source === "bundled" ? settings.bundledStatus : settings.huggingFaceStatus;
+}
+
+async function openSettingsWindow() {
+  try {
+    await invoke("open_settings_window");
+  } catch (error) {
+    state.permissionNote = `Failed to open settings: ${String(error)}`;
+    render();
+  }
+}
+
+function renderSetupBanner() {
+  if (!state.modelSettings || state.modelSettings.selectedReady) {
+    return "";
+  }
+
+  return `
+    <button class="setup-banner" id="open-settings-banner" type="button">
+      <span class="setup-banner-kicker">Setup required</span>
+      <strong class="setup-banner-title">Finish transcription model setup</strong>
+      <span class="setup-banner-copy">${escapeHtml(selectedModelStatus(state.modelSettings))}</span>
+      <span class="setup-banner-action">Open settings</span>
+    </button>
+  `;
 }
 
 function renderHome() {
   const items = sortedMeetings();
+  const setupBanner = renderSetupBanner();
+  const startDisabled = state.startMeetingBusy || requiresModelSetup();
   const note = state.permissionNote
     ? `<p class="meta home-note">${escapeHtml(state.permissionNote)}</p>`
     : "";
@@ -286,12 +326,15 @@ function renderHome() {
   return `
     <section class="screen home" id="home-screen">
       <header class="screen-header screen-header-row home-header">
-        <button class="button primary header-action" id="new-meeting" type="button">
+        <button class="button primary header-action" id="new-meeting" type="button" ${
+          startDisabled ? "disabled" : ""
+        }>
           <span>${state.startMeetingBusy ? "Starting..." : "New meeting"}</span>
           <kbd class="shortcut-hint" aria-hidden="true">${NEW_MEETING_SHORTCUT}</kbd>
         </button>
       </header>
 
+      ${setupBanner}
       ${content}
       ${note}
       <button class="scroll-top-chip" id="scroll-home-top" type="button">
@@ -583,6 +626,12 @@ function bindViewHandlers() {
     document.querySelector<HTMLButtonElement>("#new-meeting")?.addEventListener("click", () => {
       void startMeeting();
     });
+
+    document
+      .querySelector<HTMLButtonElement>("#open-settings-banner")
+      ?.addEventListener("click", () => {
+        void openSettingsWindow();
+      });
 
     document.querySelector<HTMLButtonElement>("#scroll-home-top")?.addEventListener("click", () => {
       homeScreen?.scrollTo({ top: 0, behavior: "smooth" });
@@ -914,6 +963,14 @@ async function saveMeetingAsMarkdown(meeting: Meeting) {
   }
 }
 
+function handleAppFocus() {
+  if (isSettingsWindow) {
+    return;
+  }
+
+  void Promise.all([refreshPermissions(true), refreshModelSettings(true)]);
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   render();
   if (isSettingsWindow) {
@@ -922,5 +979,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   window.addEventListener("keydown", handleWindowKeydown);
+  window.addEventListener("focus", handleAppFocus);
   await Promise.all([refreshPermissions(true), refreshModelSettings(true)]);
 });
