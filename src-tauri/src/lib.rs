@@ -4,7 +4,7 @@ mod permissions;
 use std::{
     env,
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -601,11 +601,7 @@ fn sync_meeting_markdown<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     export: MarkdownExport,
 ) -> Result<String, String> {
-    let target_dir = app
-        .path()
-        .document_dir()
-        .map_err(|error| error.to_string())?
-        .join("unsigned char");
+    let target_dir = meeting_exports_dir(&app)?;
 
     std::fs::create_dir_all(&target_dir).map_err(|error| error.to_string())?;
 
@@ -614,7 +610,8 @@ fn sync_meeting_markdown<R: tauri::Runtime>(
         .as_deref()
         .map(str::trim)
         .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
+        .map(|path| resolve_meeting_export_path(&app, path))
+        .transpose()?
         .unwrap_or_else(|| {
             let file_name = format!("meeting-{}.md", sanitize_path_component(&export.id));
             target_dir.join(file_name)
@@ -627,6 +624,45 @@ fn sync_meeting_markdown<R: tauri::Runtime>(
     std::fs::write(&file_path, build_markdown(&export)).map_err(|error| error.to_string())?;
 
     Ok(file_path.display().to_string())
+}
+
+#[tauri::command]
+fn reveal_meeting_export_in_finder<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+) -> Result<(), String> {
+    let target = resolve_meeting_export_path(&app, &path)?;
+    if !target.exists() {
+        return Err(format!(
+            "The meeting export does not exist: {}",
+            target.display()
+        ));
+    }
+
+    reveal_path_in_file_manager(&target)
+}
+
+#[tauri::command]
+fn delete_meeting_export<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+) -> Result<(), String> {
+    let target = resolve_meeting_export_path(&app, &path)?;
+    if target.is_dir() {
+        return Err(format!(
+            "Meeting export path points to a directory: {}",
+            target.display()
+        ));
+    }
+
+    match std::fs::remove_file(&target) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "Failed to delete the meeting export at {}: {error}",
+            target.display()
+        )),
+    }
 }
 
 #[tauri::command]
@@ -1100,10 +1136,64 @@ fn managed_model_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Pa
         .map_err(|error| error.to_string())
 }
 
+fn meeting_exports_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .document_dir()
+        .map(|path| path.join(APP_NAME))
+        .map_err(|error| error.to_string())
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                let _ = normalized.pop();
+            }
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+        }
+    }
+
+    normalized
+}
+
+fn resolve_meeting_export_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    path: &str,
+) -> Result<PathBuf, String> {
+    let normalized_path = path.trim();
+    if normalized_path.is_empty() {
+        return Err("Meeting export path is required.".to_string());
+    }
+
+    let exports_dir = normalize_path(&meeting_exports_dir(app)?);
+    let candidate = PathBuf::from(normalized_path);
+    let resolved = if candidate.is_absolute() {
+        normalize_path(&candidate)
+    } else {
+        normalize_path(&exports_dir.join(candidate))
+    };
+
+    if !resolved.starts_with(&exports_dir) {
+        return Err("Meeting export path is outside the unsigned char document folder.".to_string());
+    }
+
+    if resolved.extension().and_then(|value| value.to_str()) != Some("md") {
+        return Err("Meeting export path must point to a markdown file.".to_string());
+    }
+
+    Ok(resolved)
+}
+
 fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         let status = std::process::Command::new("open")
+            .arg("-R")
             .arg(path)
             .status()
             .map_err(|error| format!("Failed to open {} in Finder: {error}", path.display()))?;
@@ -1117,7 +1207,7 @@ fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let status = std::process::Command::new("explorer")
-            .arg(path)
+            .arg(format!("/select,{}", path.display()))
             .status()
             .map_err(|error| {
                 format!(
@@ -1137,13 +1227,20 @@ fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     {
+        let target = if path.is_dir() {
+            path
+        } else {
+            path.parent()
+                .ok_or_else(|| format!("Failed to determine the parent of {}.", path.display()))?
+        };
+
         let status = std::process::Command::new("xdg-open")
-            .arg(path)
+            .arg(target)
             .status()
             .map_err(|error| {
                 format!(
                     "Failed to open {} in the file manager: {error}",
-                    path.display()
+                    target.display()
                 )
             })?;
         if status.success() {
@@ -1152,7 +1249,7 @@ fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
 
         return Err(format!(
             "Failed to open {} in the file manager.",
-            path.display()
+            target.display()
         ));
     }
 
@@ -2040,6 +2137,8 @@ pub fn run() {
             save_general_settings,
             run_local_diarization,
             sync_meeting_markdown,
+            reveal_meeting_export_in_finder,
+            delete_meeting_export,
             start_live_transcription,
             live_transcription_state,
             stop_live_transcription

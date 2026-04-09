@@ -723,6 +723,16 @@ function createMeeting() {
   return meeting;
 }
 
+function clearMeetingMarkdownSync(meetingId: string) {
+  const timer = meetingMarkdownSyncTimers.get(meetingId);
+  if (typeof timer !== "number") {
+    return;
+  }
+
+  window.clearTimeout(timer);
+  meetingMarkdownSyncTimers.delete(meetingId);
+}
+
 function setMeetingExportPath(id: string, path: string) {
   let changed = false;
   state = {
@@ -754,7 +764,7 @@ function currentMeetingIdFromHash() {
 async function syncMeetingMarkdown(id: string) {
   const meeting = getMeeting(id);
   if (!meeting) {
-    return;
+    return null;
   }
 
   try {
@@ -769,12 +779,15 @@ async function syncMeetingMarkdown(id: string) {
     ) {
       patch({ meetingNote: "" });
     }
+
+    return path;
   } catch (error) {
     if (currentMeetingIdFromHash() !== id) {
-      return;
+      return null;
     }
 
     patch({ meetingNote: `${MARKDOWN_SAVE_ERROR_PREFIX} ${String(error)}` });
+    return null;
   }
 }
 
@@ -783,10 +796,7 @@ function scheduleMeetingMarkdownSync(meeting: Meeting) {
     return;
   }
 
-  const existingTimer = meetingMarkdownSyncTimers.get(meeting.id);
-  if (typeof existingTimer === "number") {
-    window.clearTimeout(existingTimer);
-  }
+  clearMeetingMarkdownSync(meeting.id);
 
   const nextTimer = window.setTimeout(() => {
     meetingMarkdownSyncTimers.delete(meeting.id);
@@ -1235,6 +1245,73 @@ async function runMeetingDiarization(meetingId: string) {
   }
 }
 
+async function revealMeetingExportInFinder(meetingId: string) {
+  const meeting = getMeeting(meetingId);
+  if (!meeting) {
+    return;
+  }
+
+  patch({ permissionNote: "" });
+
+  try {
+    const path = meeting.exportPath?.trim() || (await syncMeetingMarkdown(meetingId));
+    if (!path) {
+      throw new Error("Failed to resolve the meeting export.");
+    }
+
+    await invoke("reveal_meeting_export_in_finder", { path });
+  } catch (error) {
+    patch({
+      permissionNote: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function deleteMeeting(meetingId: string) {
+  const meeting = getMeeting(meetingId);
+  if (
+    !meeting ||
+    state.transcriptionBusy ||
+    state.recordingMeetingId === meetingId ||
+    meeting.status === "live"
+  ) {
+    return;
+  }
+
+  const exportPath = meeting.exportPath?.trim() || null;
+  const deletedActiveMeeting = currentMeetingIdFromHash() === meetingId;
+
+  clearMeetingMarkdownSync(meetingId);
+
+  state = {
+    ...state,
+    meetings: state.meetings.filter((candidate) => candidate.id !== meetingId),
+    permissionNote: "",
+    meetingNote: deletedActiveMeeting ? "" : state.meetingNote,
+  };
+  persistMeetings();
+  emit();
+
+  if (deletedActiveMeeting) {
+    setHashRoute("/");
+  }
+
+  if (!exportPath) {
+    return;
+  }
+
+  try {
+    await invoke("delete_meeting_export", { path: exportPath });
+  } catch (error) {
+    patch({
+      permissionNote:
+        error instanceof Error
+          ? `Deleted the meeting, but couldn't remove its markdown file: ${error.message}`
+          : `Deleted the meeting, but couldn't remove its markdown file: ${String(error)}`,
+    });
+  }
+}
+
 async function saveGeneralSettings() {
   if (state.generalBusy) {
     return;
@@ -1497,6 +1574,8 @@ export const appStore = {
   startMeeting,
   toggleMeetingStatus,
   runMeetingDiarization,
+  revealMeetingExportInFinder,
+  deleteMeeting,
   startManagedModelDownload,
   updateMeetingTitle,
   updateMeetingAudioPath,
