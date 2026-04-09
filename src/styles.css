@@ -4,16 +4,9 @@
     ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
     sans-serif;
   color: #18181b;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
-    radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.42) 0%, transparent 34%),
-    radial-gradient(circle at 86% 88%, rgba(224, 226, 232, 0.16) 0%, transparent 38%),
-    rgba(236, 241, 248, 0.18);
-  --background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
-    radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.42) 0%, transparent 34%),
-    radial-gradient(circle at 86% 88%, rgba(224, 226, 232, 0.16) 0%, transparent 38%),
-    rgba(236, 241, 248, 0.18);
+  background: #ffffff;
+  --app-background: #ffffff;
+  --background: #ffffff;
   --surface:
     linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.18) 38%, rgba(255, 255, 255, 0.1) 100%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.18) 26%, rgba(255, 255, 255, 0) 56%),
@@ -59,16 +52,9 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f5f5f5;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
-      radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.14) 0%, transparent 34%),
-      radial-gradient(circle at 88% 90%, rgba(118, 121, 130, 0.18) 0%, transparent 38%),
-      rgba(14, 15, 19, 0.26);
-    --background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
-      radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.14) 0%, transparent 34%),
-      radial-gradient(circle at 88% 90%, rgba(118, 121, 130, 0.18) 0%, transparent 38%),
-      rgba(14, 15, 19, 0.26);
+    background: #111214;
+    --app-background: #111214;
+    --background: #111214;
     --surface:
       linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.05) 36%, rgba(255, 255, 255, 0.03) 100%),
       linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 24%, rgba(255, 255, 255, 0) 54%),
@@ -121,36 +107,16 @@ body {
   position: relative;
   margin: 0;
   overflow: hidden;
-  background: transparent;
+  background: var(--app-background);
   color: var(--text);
-  transition: background-color 160ms ease;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 10% 12%, rgba(255, 255, 255, 0.82) 0%, transparent 28%),
-    radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.22) 0%, transparent 30%),
-    radial-gradient(circle at 88% 86%, rgba(224, 226, 232, 0.18) 0%, transparent 36%),
-    var(--background);
-  backdrop-filter: blur(30px) saturate(1.2);
-  -webkit-backdrop-filter: blur(30px) saturate(1.2);
-}
-
+body::before,
 body::after {
-  content: "";
-  position: fixed;
-  inset: -18%;
-  pointer-events: none;
-  background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.12) 18%, transparent 36%),
-    linear-gradient(308deg, rgba(224, 226, 232, 0.18) 0%, transparent 32%);
-  filter: blur(20px);
-  opacity: 0.92;
-  transform: translate3d(-4%, -2%, 0);
+  display: none;
 }
 
 button,
@@ -1432,8 +1398,8 @@ h2 {
 }
 
 body[data-window-kind="settings"] {
-  background: #f4f7fb;
-  --background: #f4f7fb;
+  background: var(--app-background);
+  --background: var(--app-background);
   --surface: #ffffff;
   --surface-soft: #f7f9fc;
   --surface-muted: #edf2f8;
@@ -1520,8 +1486,8 @@ body[data-meeting-overlay="on"] .screen {
 
 @media (prefers-color-scheme: dark) {
   body[data-window-kind="settings"] {
-    background: #12161d;
-    --background: #12161d;
+    background: var(--app-background);
+    --background: var(--app-background);
     --surface: #1a2029;
     --surface-soft: #202734;
     --surface-muted: #171d26;
@@ -1531,21 +1497,6 @@ body[data-meeting-overlay="on"] .screen {
       0 1px 2px rgba(0, 0, 0, 0.28),
       0 12px 28px rgba(0, 0, 0, 0.24);
   }
-
-  body::before {
-    background:
-      radial-gradient(circle at 10% 12%, rgba(255, 255, 255, 0.16) 0%, transparent 30%),
-      radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.08) 0%, transparent 28%),
-      radial-gradient(circle at 88% 86%, rgba(118, 121, 130, 0.16) 0%, transparent 36%),
-      var(--background);
-  }
-
-  body::after {
-    background:
-      linear-gradient(118deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 18%, transparent 36%),
-      linear-gradient(308deg, rgba(118, 121, 130, 0.16) 0%, transparent 32%);
-  }
-
   body[data-meeting-overlay="on"] {
     --background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)),
