@@ -1026,30 +1026,6 @@ function renderMeeting() {
             </svg>
             <span>Back</span>
           </button>
-          <button
-            class="button ghost meeting-overlay-toggle ${state.meetingOverlayEnabled ? "active" : ""}"
-            id="toggle-meeting-overlay"
-            type="button"
-            aria-pressed="${state.meetingOverlayEnabled ? "true" : "false"}"
-            ${state.meetingOverlayBusy ? "disabled" : ""}
-          >
-            <svg class="button-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M8 1.75c.41 1.62 1.56 3.77 3.18 5.36 1.24 1.21 2.68 2.1 4.07 2.39-.36.88-.98 1.74-1.9 2.52-1.4 1.18-3.3 1.98-5.35 2.23-.2.03-.4.03-.6 0-2.05-.25-3.95-1.05-5.35-2.23-.92-.78-1.54-1.64-1.9-2.52 1.39-.29 2.83-1.18 4.07-2.39C6.44 5.52 7.59 3.37 8 1.75Z"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M8 6v4.25"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-              />
-            </svg>
-            <span>${state.meetingOverlayBusy ? "Updating..." : state.meetingOverlayEnabled ? "Overlay on" : "Overlay"}</span>
-          </button>
         </div>
         <div class="meeting-heading">
           <h1 class="meeting-title">
@@ -1110,6 +1086,7 @@ function render() {
 
   appRoot.innerHTML = markup;
   syncMeetingOverlayAppearance();
+  syncMeetingAlwaysOnTop();
   bindViewHandlers();
   syncLiveTranscriptionPolling();
 
@@ -1131,8 +1108,31 @@ function render() {
 }
 
 function syncMeetingOverlayAppearance() {
-  document.body.dataset.meetingOverlay =
-    !isSettingsWindow && state.view === "meeting" && state.meetingOverlayEnabled ? "on" : "off";
+  document.body.dataset.meetingOverlay = !isSettingsWindow && state.view === "meeting" ? "on" : "off";
+}
+
+function syncMeetingAlwaysOnTop() {
+  if (isSettingsWindow || state.meetingOverlayBusy) {
+    return;
+  }
+
+  const enabled = state.view === "meeting";
+  if (state.meetingOverlayEnabled === enabled) {
+    return;
+  }
+
+  state.meetingOverlayBusy = true;
+  void setMeetingOverlayEnabled(enabled)
+    .catch((error) => {
+      state.meetingNote =
+        error instanceof Error ? `Always on top failed: ${error.message}` : `Always on top failed: ${String(error)}`;
+    })
+    .finally(() => {
+      state.meetingOverlayBusy = false;
+      if (enabled !== (state.view === "meeting")) {
+        syncMeetingAlwaysOnTop();
+      }
+    });
 }
 
 async function setMeetingOverlayEnabled(enabled: boolean) {
@@ -1331,47 +1331,10 @@ function bindViewHandlers() {
   }
 
   document.querySelector<HTMLButtonElement>("#back-home")?.addEventListener("click", async () => {
-    if (state.meetingOverlayEnabled) {
-      try {
-        await setMeetingOverlayEnabled(false);
-      } catch (error) {
-        state.meetingNote =
-          error instanceof Error
-            ? `Failed to disable overlay: ${error.message}`
-            : `Failed to disable overlay: ${String(error)}`;
-        render();
-        return;
-      }
-    }
-
     state.activeMeetingId = null;
     state.view = "home";
     render();
   });
-
-  document
-    .querySelector<HTMLButtonElement>("#toggle-meeting-overlay")
-    ?.addEventListener("click", async () => {
-      if (state.meetingOverlayBusy) {
-        return;
-      }
-
-      state.meetingOverlayBusy = true;
-      state.meetingNote = "";
-      render();
-
-      try {
-        await setMeetingOverlayEnabled(!state.meetingOverlayEnabled);
-      } catch (error) {
-        state.meetingNote =
-          error instanceof Error
-            ? `Overlay toggle failed: ${error.message}`
-            : `Overlay toggle failed: ${String(error)}`;
-      } finally {
-        state.meetingOverlayBusy = false;
-        render();
-      }
-    });
 
   document
     .querySelector<HTMLButtonElement>("#toggle-meeting-status")

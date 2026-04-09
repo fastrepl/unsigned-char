@@ -826,17 +826,7 @@ h2 {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-}
-
-.meeting-overlay-toggle.active {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  border-color: var(--accent);
-}
-
-.meeting-overlay-toggle.active:hover {
-  background: #27272a;
-  border-color: #27272a;
+  margin-bottom: 16px;
 }
 
 .meeting-subtitle {
@@ -1021,7 +1011,7 @@ body[data-meeting-overlay="on"] .screen.meeting {
   .meeting-nav {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .meeting-nav .button,
