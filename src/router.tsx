@@ -816,23 +816,43 @@ function MeetingScreen() {
 
         <p className="mt-3 text-sm leading-6 text-zinc-600">
           {diarizationReady
-            ? "The app runs pyannote.audio locally against the file path you provide here."
+            ? "The app runs pyannote.audio locally against the file path below after the meeting ends. Add a speaker count if you want to lock the diarization pass to a specific number of speakers."
             : snapshot.diarizationSettings?.status ?? "Speaker diarization is not ready yet."}
         </p>
 
-        <label className="mt-4 block">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-            Audio file path
-          </span>
-          <input
-            value={meeting.audioPath}
-            onChange={(event) => {
-              appStore.updateMeetingAudioPath(meeting.id, event.target.value);
-            }}
-            placeholder="~/Recordings/meeting.wav"
-            className="mt-2 min-h-11 w-full rounded-xl border border-zinc-900/10 bg-white/70 px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500"
-          />
-        </label>
+        <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+              Audio file path
+            </span>
+            <input
+              value={meeting.audioPath}
+              onChange={(event) => {
+                appStore.updateMeetingAudioPath(meeting.id, event.target.value);
+              }}
+              placeholder="~/Recordings/meeting.wav"
+              className="mt-2 min-h-11 w-full rounded-xl border border-zinc-900/10 bg-white/70 px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+              Speaker count
+            </span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              value={meeting.requestedSpeakerCount ?? ""}
+              onChange={(event) => {
+                appStore.updateMeetingRequestedSpeakerCount(meeting.id, event.target.value);
+              }}
+              placeholder="Auto"
+              className="mt-2 min-h-11 w-full rounded-xl border border-zinc-900/10 bg-white/70 px-4 text-sm text-zinc-900 outline-none placeholder:text-zinc-500"
+            />
+          </label>
+        </div>
 
         <div className="mt-4">
           <SecondaryButton
@@ -849,7 +869,7 @@ function MeetingScreen() {
           {meeting.diarizationRanAt
             ? `${meeting.diarizationSpeakerCount} speakers across ${meeting.diarizationSegments.length} segments · ${formatDateTime(meeting.diarizationRanAt)}`
             : diarizationEnabled
-              ? "Provide an audio file for this meeting and run diarization locally."
+              ? "Add an audio file path and the app will run diarization automatically after the meeting ends."
               : "Speaker diarization is not available in this build yet."}
         </p>
 
@@ -870,7 +890,7 @@ function MeetingScreen() {
               <p className="text-lg font-semibold tracking-[-0.02em] text-zinc-950">No speaker turns yet</p>
               <p className="mt-2 text-sm leading-6 text-zinc-600">
                 {meeting.audioPath
-                  ? "Run diarization to label speakers for the current audio file."
+                  ? "Finish the meeting to run diarization automatically, or run it manually now."
                   : "Add an audio file path to run local diarization for this meeting."}
               </p>
             </div>

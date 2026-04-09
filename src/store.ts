@@ -23,6 +23,7 @@ export type Meeting = {
   status: MeetingStatus;
   transcript: string[];
   audioPath: string;
+  requestedSpeakerCount: number | null;
   diarizationSegments: DiarizationSegment[];
   diarizationSpeakerCount: number;
   diarizationPipelineSource: string | null;
@@ -153,6 +154,8 @@ const LIVE_TRANSCRIPTION_POLL_MS = 1200;
 const MODEL_DOWNLOAD_POLL_MS = 1000;
 const MEETING_MARKDOWN_SYNC_MS = 250;
 const MARKDOWN_SAVE_ERROR_PREFIX = "Markdown save failed:";
+const pendingAutoDiarizationMeetingIds: string[] = [];
+let autoDiarizationDrainRunning = false;
 
 export const currentWindow = getCurrentWindow();
 export const isSettingsWindow = currentWindow.label === SETTINGS_WINDOW_LABEL;
@@ -394,6 +397,7 @@ function normalizeMeeting(value: unknown): Meeting | null {
     status: candidate.status,
     transcript: candidate.transcript.filter((line): line is string => typeof line === "string"),
     audioPath: typeof candidate.audioPath === "string" ? candidate.audioPath : "",
+    requestedSpeakerCount: normalizeRequestedSpeakerCount(candidate.requestedSpeakerCount),
     diarizationSegments,
     diarizationSpeakerCount:
       typeof candidate.diarizationSpeakerCount === "number" &&
@@ -445,6 +449,15 @@ function normalizeDiarizationSegments(value: unknown): DiarizationSegment[] {
       },
     ];
   });
+}
+
+function normalizeRequestedSpeakerCount(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  const normalized = Math.trunc(value);
+  return normalized > 0 ? normalized : null;
 }
 
 function distinctSpeakerCount(segments: DiarizationSegment[]) {
@@ -705,6 +718,7 @@ function createMeeting() {
     status: "live",
     transcript: [],
     audioPath: "",
+    requestedSpeakerCount: null,
     diarizationSegments: [],
     diarizationSpeakerCount: 0,
     diarizationPipelineSource: null,
@@ -721,6 +735,44 @@ function createMeeting() {
   scheduleMeetingMarkdownSync(meeting);
   emit();
   return meeting;
+}
+
+function queueMeetingAutoDiarization(meetingId: string) {
+  const meeting = getMeeting(meetingId);
+  if (!meeting || !meeting.audioPath.trim() || !state.diarizationSettings?.enabled) {
+    return;
+  }
+
+  if (pendingAutoDiarizationMeetingIds.includes(meetingId)) {
+    return;
+  }
+
+  pendingAutoDiarizationMeetingIds.push(meetingId);
+  void drainAutoDiarizationQueue();
+}
+
+async function drainAutoDiarizationQueue() {
+  if (autoDiarizationDrainRunning || state.diarizationRunBusy) {
+    return;
+  }
+
+  autoDiarizationDrainRunning = true;
+
+  try {
+    while (!state.diarizationRunBusy) {
+      const meetingId = pendingAutoDiarizationMeetingIds.shift();
+      if (!meetingId) {
+        break;
+      }
+
+      await runMeetingDiarization(meetingId, { automatic: true });
+    }
+  } finally {
+    autoDiarizationDrainRunning = false;
+    if (pendingAutoDiarizationMeetingIds.length > 0 && !state.diarizationRunBusy) {
+      void drainAutoDiarizationQueue();
+    }
+  }
 }
 
 function clearMeetingMarkdownSync(meetingId: string) {
@@ -1044,7 +1096,7 @@ function finalizeLiveTranscript(markDone = false) {
       liveTranscriptText: "",
       recordingMeetingId: null,
     });
-    return;
+    return null;
   }
 
   updateMeeting(meeting.id, (current) => {
@@ -1065,6 +1117,8 @@ function finalizeLiveTranscript(markDone = false) {
     liveTranscriptText: "",
     recordingMeetingId: null,
   });
+
+  return meeting.id;
 }
 
 async function refreshLiveTranscription(silent = false) {
@@ -1081,7 +1135,10 @@ async function refreshLiveTranscription(silent = false) {
     emit();
 
     if (wasRunning && !snapshot.running) {
-      finalizeLiveTranscript(true);
+      const endedMeetingId = finalizeLiveTranscript(true);
+      if (endedMeetingId) {
+        queueMeetingAutoDiarization(endedMeetingId);
+      }
     }
   } catch (error) {
     if (!silent) {
@@ -1109,7 +1166,10 @@ async function stopLiveTranscriptionSession() {
   };
   emit();
 
-  finalizeLiveTranscript(true);
+  const endedMeetingId = finalizeLiveTranscript(true);
+  if (endedMeetingId) {
+    queueMeetingAutoDiarization(endedMeetingId);
+  }
   syncLiveTranscriptionPolling();
 }
 
@@ -1120,11 +1180,6 @@ async function stopActiveRecordingIfNeeded(nextMeetingId: string | null = null) 
   }
 
   await stopLiveTranscriptionSession();
-  updateMeeting(activeMeeting.id, (current) => ({
-    ...current,
-    status: "done",
-    updatedAt: new Date().toISOString(),
-  }));
 }
 
 function setHashRoute(path: string) {
@@ -1176,11 +1231,6 @@ async function toggleMeetingStatus(meetingId: string) {
   try {
     if (meeting.status === "live") {
       await stopLiveTranscriptionSession();
-      updateMeeting(meeting.id, (current) => ({
-        ...current,
-        status: "done",
-        updatedAt: new Date().toISOString(),
-      }));
       return;
     }
 
@@ -1202,7 +1252,10 @@ async function toggleMeetingStatus(meetingId: string) {
   }
 }
 
-async function runMeetingDiarization(meetingId: string) {
+async function runMeetingDiarization(
+  meetingId: string,
+  options: { automatic?: boolean } = {},
+) {
   const meeting = getMeeting(meetingId);
   if (!meeting || state.diarizationRunBusy) {
     return;
@@ -1217,7 +1270,10 @@ async function runMeetingDiarization(meetingId: string) {
     await ensureDiarizationReady();
 
     const result = await invoke<LocalDiarizationResult>("run_local_diarization", {
-      input: { audioPath: meeting.audioPath.trim() },
+      input: {
+        audioPath: meeting.audioPath.trim(),
+        speakerCount: meeting.requestedSpeakerCount,
+      },
     });
 
     updateMeeting(meetingId, (current) => ({
@@ -1233,15 +1289,25 @@ async function runMeetingDiarization(meetingId: string) {
     patch({
       meetingNote:
         result.segments.length === 0
-          ? "Diarization finished, but no speaker turns were detected."
-          : `Detected ${result.speakerCount} speakers across ${result.segments.length} segments.`,
+          ? options.automatic
+            ? "Auto-diarization finished, but no speaker turns were detected."
+            : "Diarization finished, but no speaker turns were detected."
+          : options.automatic
+            ? `Auto-diarized ${result.speakerCount} speakers across ${result.segments.length} segments.`
+            : `Detected ${result.speakerCount} speakers across ${result.segments.length} segments.`,
     });
   } catch (error) {
     patch({
-      meetingNote: error instanceof Error ? error.message : String(error),
+      meetingNote:
+        error instanceof Error
+          ? options.automatic
+            ? `Auto-diarization failed: ${error.message}`
+            : error.message
+          : String(error),
     });
   } finally {
     patch({ diarizationRunBusy: false });
+    void drainAutoDiarizationQueue();
   }
 }
 
@@ -1469,6 +1535,18 @@ function updateMeetingAudioPath(meetingId: string, audioPath: string) {
   }));
 }
 
+function updateMeetingRequestedSpeakerCount(meetingId: string, value: string) {
+  const trimmed = value.trim();
+  const requestedSpeakerCount =
+    trimmed.length === 0 ? null : normalizeRequestedSpeakerCount(Number.parseInt(trimmed, 10));
+
+  updateMeeting(meetingId, (meeting) => ({
+    ...meeting,
+    requestedSpeakerCount,
+    updatedAt: meeting.updatedAt,
+  }));
+}
+
 function setHomeScrollTop(homeScrollTop: number) {
   patch({ homeScrollTop });
 }
@@ -1579,6 +1657,7 @@ export const appStore = {
   startManagedModelDownload,
   updateMeetingTitle,
   updateMeetingAudioPath,
+  updateMeetingRequestedSpeakerCount,
   setHomeScrollTop,
   setMainLanguage,
   setTimezone,

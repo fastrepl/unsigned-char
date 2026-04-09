@@ -12,6 +12,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--audio-path", required=True)
     parser.add_argument("--pipeline", required=True)
+    parser.add_argument("--speaker-count", type=int)
     return parser.parse_args()
 
 
@@ -52,7 +53,13 @@ def main() -> int:
         pass
 
     try:
-        diarization = pipeline(args.audio_path)
+        diarization_kwargs = {}
+        if args.speaker_count is not None:
+            if args.speaker_count < 1:
+                return fail("Speaker count must be at least 1.")
+            diarization_kwargs["num_speakers"] = args.speaker_count
+
+        diarization = pipeline(args.audio_path, **diarization_kwargs)
     except Exception as error:  # pragma: no cover - runtime integration path
         return fail(f"Failed to diarize '{args.audio_path}': {error}")
 

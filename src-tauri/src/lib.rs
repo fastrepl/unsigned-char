@@ -86,6 +86,8 @@ struct MarkdownExport {
 #[serde(rename_all = "camelCase")]
 struct RunLocalDiarizationInput {
     audio_path: String,
+    #[serde(default)]
+    speaker_count: Option<usize>,
 }
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
@@ -559,6 +561,14 @@ fn run_local_diarization<R: tauri::Runtime>(
         .arg(&resolved_audio_path)
         .arg("--pipeline")
         .arg(&pipeline_source);
+
+    if let Some(speaker_count) = input.speaker_count {
+        if speaker_count == 0 {
+            return Err("Speaker count must be at least 1.".to_string());
+        }
+
+        command.arg("--speaker-count").arg(speaker_count.to_string());
+    }
 
     if let Some(token) = hugging_face_token {
         command.env(HUGGING_FACE_TOKEN_ENV, token);
