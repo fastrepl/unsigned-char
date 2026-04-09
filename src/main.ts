@@ -1014,7 +1014,18 @@ function renderMeeting() {
     <section class="screen meeting">
       <header class="meeting-header">
         <div class="meeting-nav">
-          <button class="back-button" id="back-home" type="button">Back</button>
+          <button class="back-button" id="back-home" type="button">
+            <svg class="button-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M10.5 3.5L6 8l4.5 4.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>Back</span>
+          </button>
           <button
             class="button ghost meeting-overlay-toggle ${state.meetingOverlayEnabled ? "active" : ""}"
             id="toggle-meeting-overlay"
@@ -1022,7 +1033,22 @@ function renderMeeting() {
             aria-pressed="${state.meetingOverlayEnabled ? "true" : "false"}"
             ${state.meetingOverlayBusy ? "disabled" : ""}
           >
-            ${state.meetingOverlayBusy ? "Updating..." : state.meetingOverlayEnabled ? "Overlay on" : "Overlay"}
+            <svg class="button-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M8 1.75c.41 1.62 1.56 3.77 3.18 5.36 1.24 1.21 2.68 2.1 4.07 2.39-.36.88-.98 1.74-1.9 2.52-1.4 1.18-3.3 1.98-5.35 2.23-.2.03-.4.03-.6 0-2.05-.25-3.95-1.05-5.35-2.23-.92-.78-1.54-1.64-1.9-2.52 1.39-.29 2.83-1.18 4.07-2.39C6.44 5.52 7.59 3.37 8 1.75Z"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M8 6v4.25"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+              />
+            </svg>
+            <span>${state.meetingOverlayBusy ? "Updating..." : state.meetingOverlayEnabled ? "Overlay on" : "Overlay"}</span>
           </button>
         </div>
         <div class="meeting-heading">
