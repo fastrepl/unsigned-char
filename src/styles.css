@@ -116,6 +116,10 @@ button {
   gap: 16px;
 }
 
+.home-header {
+  justify-content: flex-end;
+}
+
 .screen-header-copy {
   min-width: 0;
 }

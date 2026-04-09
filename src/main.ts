@@ -223,10 +223,7 @@ function renderHome() {
 
   return `
     <section class="screen home">
-      <header class="screen-header screen-header-row">
-        <div class="screen-header-copy">
-          <h1>Meetings</h1>
-        </div>
+      <header class="screen-header screen-header-row home-header">
         <button class="button primary header-action" id="new-meeting" type="button">
           ${state.startMeetingBusy ? "Starting..." : "New meeting"}
         </button>
