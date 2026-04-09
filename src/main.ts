@@ -781,6 +781,54 @@ function modelDownloadProgressCopy(download: ManagedModelDownloadState) {
   return "Preparing download";
 }
 
+function modelDownloadProgressRatio(download: ManagedModelDownloadState) {
+  if (!download.totalBytes || download.totalBytes <= 0) {
+    return null;
+  }
+
+  return Math.min(download.bytesDownloaded / download.totalBytes, 1);
+}
+
+function modelDownloadProgressPercent(download: ManagedModelDownloadState) {
+  const ratio = modelDownloadProgressRatio(download);
+  if (ratio === null) {
+    return null;
+  }
+
+  return Math.round(ratio * 100);
+}
+
+function renderModelDownloadProgress(download: ManagedModelDownloadState) {
+  const ratio = modelDownloadProgressRatio(download);
+  const percent = modelDownloadProgressPercent(download);
+  const currentFile = download.currentFile ?? "Preparing model files";
+  const fillWidth = ratio === null ? "20%" : `${Math.max(ratio * 100, 4)}%`;
+
+  return `
+    <div class="download-progress${ratio === null ? " indeterminate" : ""}">
+      <div class="download-progress-header">
+        <span class="download-progress-file">${escapeHtml(currentFile)}</span>
+        <span class="download-progress-percent">${escapeHtml(
+          percent === null ? "Starting" : `${percent}%`,
+        )}</span>
+      </div>
+      <div
+        class="download-progress-track"
+        role="progressbar"
+        aria-label="Model download progress"
+        ${
+          percent === null
+            ? `aria-valuetext="${escapeHtml(modelDownloadProgressCopy(download))}"`
+            : `aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"`
+        }
+      >
+        <span class="download-progress-fill" style="width: ${fillWidth};"></span>
+      </div>
+      <p class="download-progress-copy">${escapeHtml(modelDownloadProgressCopy(download))}</p>
+    </div>
+  `;
+}
+
 function currentSetupBannerContent() {
   if (!requiresModelSetup() || !state.modelSettings) {
     return null;
@@ -789,19 +837,13 @@ function currentSetupBannerContent() {
   const download = state.modelDownload;
   const isDownloading = download?.status === "downloading";
   const isError = download?.status === "error";
-  const localPath = download?.localPath || state.modelSettings.huggingFaceLocalPath;
 
   if (isDownloading && download) {
-    const progress = download.currentFile
-      ? `${download.currentFile} · ${modelDownloadProgressCopy(download)}`
-      : modelDownloadProgressCopy(download);
-
     return {
       kicker: "Downloading model",
       title: "Transcription model setup in progress",
-      copy: "unsigned char is downloading Qwen3-ASR once and storing it locally on this Mac.",
-      detail: progress,
-      localPath,
+      copy: "unsigned char is downloading Qwen3-ASR once for local transcription.",
+      detail: null,
       actionLabel: null,
     };
   }
@@ -812,7 +854,6 @@ function currentSetupBannerContent() {
       title: "Transcription model setup failed",
       copy: download.error ?? "The model download did not complete.",
       detail: "Retry to finish local transcription setup.",
-      localPath,
       actionLabel: "Retry download",
     };
   }
@@ -823,7 +864,6 @@ function currentSetupBannerContent() {
     copy:
       "Download Qwen3-ASR once to run transcription locally. The model is stored outside the app bundle and stays on this device.",
     detail: "The download is about 1.8 GB.",
-    localPath,
     actionLabel: "Download model",
   };
 }
@@ -844,6 +884,10 @@ function renderSetupBanner() {
   if (!content) {
     return "";
   }
+  const downloadProgress =
+    state.modelDownload?.status === "downloading" && state.modelDownload
+      ? renderModelDownloadProgress(state.modelDownload)
+      : "";
 
   return `
     <div class="setup-banner">
@@ -855,16 +899,7 @@ function renderSetupBanner() {
           ? `<span class="setup-banner-detail">${escapeHtml(content.detail)}</span>`
           : ""
       }
-      ${
-        content.localPath
-          ? `
-            <div class="setup-banner-path">
-              <span class="meta-label">Storage</span>
-              <code>${escapeHtml(content.localPath)}</code>
-            </div>
-          `
-          : ""
-      }
+      ${downloadProgress}
       ${
         content.actionLabel
           ? `
@@ -1026,15 +1061,12 @@ function renderSettingsWindow() {
   const setupContent = currentSetupBannerContent();
   const modelDetail =
     modelDownloadStatus === "downloading" && state.modelDownload
-      ? state.modelDownload.currentFile
-        ? `${state.modelDownload.currentFile} · ${modelDownloadProgressCopy(state.modelDownload)}`
-        : modelDownloadProgressCopy(state.modelDownload)
-      : setupContent?.detail ??
-        (state.modelSettings?.selectedReference
-          ? `Stored at ${state.modelSettings.selectedReference}`
-          : "");
-  const modelStoragePath =
-    state.modelDownload?.localPath || state.modelSettings?.huggingFaceLocalPath || "";
+      ? ""
+      : setupContent?.detail ?? "";
+  const modelDownloadProgress =
+    modelDownloadStatus === "downloading" && state.modelDownload
+      ? renderModelDownloadProgress(state.modelDownload)
+      : "";
 
   return `
     <section class="settings-shell">
@@ -1058,20 +1090,11 @@ function renderSettingsWindow() {
             )}
           </p>
 
+          ${modelDownloadProgress}
+
           ${
             modelDetail
               ? `<p class="meta">${escapeHtml(modelDetail)}</p>`
-              : ""
-          }
-
-          ${
-            modelStoragePath
-              ? `
-                <div class="model-path-row">
-                  <span class="meta-label">Storage</span>
-                  <code>${escapeHtml(modelStoragePath)}</code>
-                </div>
-              `
               : ""
           }
 
@@ -2110,10 +2133,6 @@ async function refreshDiarizationSettings(silent = false) {
 }
 
 function syncModelDownloadPolling() {
-  if (isSettingsWindow) {
-    return;
-  }
-
   const shouldPoll = state.modelDownload?.status === "downloading";
   if (!shouldPoll) {
     if (modelDownloadPollId !== null) {

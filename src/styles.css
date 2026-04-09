@@ -558,8 +558,7 @@ h2 {
   line-height: 1.4;
 }
 
-.setup-banner-actions,
-.setup-banner-path {
+.setup-banner-actions {
   display: flex;
   width: 100%;
 }
@@ -568,19 +567,88 @@ h2 {
   padding-top: 4px;
 }
 
-.setup-banner-path {
+.download-progress {
+  display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.setup-banner-path code {
+.download-progress-header,
+.download-progress-track {
+  display: flex;
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-muted);
+}
+
+.download-progress-header {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.download-progress-file,
+.download-progress-percent {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.download-progress-file {
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-progress-percent {
+  flex: 0 0 auto;
   color: var(--text-soft);
-  word-break: break-word;
+}
+
+.download-progress-track {
+  position: relative;
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.08);
+}
+
+.download-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(24, 24, 27, 0.9), rgba(82, 82, 91, 0.72));
+  transition: width 180ms ease;
+}
+
+.download-progress.indeterminate .download-progress-fill {
+  animation: download-progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+.download-progress-copy {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@keyframes download-progress-indeterminate {
+  0% {
+    transform: translateX(-85%);
+  }
+
+  100% {
+    transform: translateX(420%);
+  }
 }
 
 .scroll-top-chip {
@@ -1056,6 +1124,14 @@ h2 {
     animation: none;
     opacity: 0.3;
   }
+
+  .download-progress.indeterminate .download-progress-fill {
+    animation: none;
+  }
+
+  .download-progress-fill {
+    transition: none;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1117,6 +1193,15 @@ h2 {
     background:
       linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05) 42%, rgba(118, 121, 130, 0.12)),
       var(--surface);
+  }
+
+  .download-progress-track {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .download-progress-fill {
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.92), rgba(196, 198, 204, 0.72));
   }
 
   .scroll-top-chip:hover {
