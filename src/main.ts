@@ -43,6 +43,7 @@ type ModelSettings = {
   huggingFaceResolvedPath: string | null;
   huggingFaceReady: boolean;
   huggingFaceStatus: string;
+  usesManagedModel: boolean;
   selectedReady: boolean;
   selectedReference: string | null;
 };
@@ -130,6 +131,7 @@ const STORE_KEY = "unsigned-char-meetings";
 const isMacLike = /Mac|iPhone|iPad|iPod/.test(window.navigator.userAgent);
 const NEW_MEETING_SHORTCUT = isMacLike ? "⌘N" : "Ctrl+N";
 const SETTINGS_WINDOW_LABEL = "settings";
+const MANAGED_MODEL_NAME = "Qwen3-ASR 0.6B";
 const currentWindow = getCurrentWindow();
 const isSettingsWindow = currentWindow.label === SETTINGS_WINDOW_LABEL;
 const LIVE_TRANSCRIPTION_POLL_MS = 1200;
@@ -1044,8 +1046,12 @@ function renderSettingsWindow() {
   const note = state.generalNote
     ? `<p class="meta settings-note">${escapeHtml(state.generalNote)}</p>`
     : "";
+  const modelNote = state.modelNote
+    ? `<p class="meta settings-note">${escapeHtml(state.modelNote)}</p>`
+    : "";
   const modelReady = Boolean(state.modelSettings?.selectedReady);
   const modelDownloadStatus = state.modelDownload?.status ?? "idle";
+  const isManagedModelReady = Boolean(modelReady && state.modelSettings?.usesManagedModel);
   const modelStatusLabel =
     modelDownloadStatus === "downloading"
       ? "downloading"
@@ -1067,6 +1073,56 @@ function renderSettingsWindow() {
     modelDownloadStatus === "downloading" && state.modelDownload
       ? renderModelDownloadProgress(state.modelDownload)
       : "";
+  const modelManagementCard = isManagedModelReady
+    ? `
+      <div class="managed-model-card">
+        <strong class="managed-model-title">${escapeHtml(MANAGED_MODEL_NAME)}</strong>
+        <div class="managed-model-actions">
+          <button
+            class="button secondary managed-model-reveal"
+            id="show-model-in-finder"
+            type="button"
+            ${state.modelBusy ? "disabled" : ""}
+          >
+            <svg class="button-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M2.5 5.5A1.5 1.5 0 0 1 4 4h2l1 1.25h5A1.5 1.5 0 0 1 13.5 6.75v4.75A1.5 1.5 0 0 1 12 13H4a1.5 1.5 0 0 1-1.5-1.5z"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M2.5 7h11"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+            <span>Show in Finder</span>
+          </button>
+          <button
+            class="managed-model-delete"
+            id="delete-model"
+            type="button"
+            aria-label="Delete model"
+            title="Delete model"
+            ${state.modelBusy ? "disabled" : ""}
+          >
+            <svg class="button-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M6 2.75h4M3.75 4.75h8.5M5.25 4.75v7a1 1 0 0 0 1 1h3.5a1 1 0 0 0 1-1v-7M6.75 7v3.25M9.25 7v3.25"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    `
+    : "";
 
   return `
     <section class="settings-shell">
@@ -1084,11 +1140,15 @@ function renderSettingsWindow() {
 
           <p class="meta">
             ${escapeHtml(
-              modelReady
+              isManagedModelReady
+                ? "The downloaded transcription model is available locally."
+                : modelReady
                 ? state.modelSettings?.huggingFaceStatus ?? "Local transcription model is ready."
                 : setupContent?.copy ?? "Download the local transcription model to continue.",
             )}
           </p>
+
+          ${modelManagementCard}
 
           ${modelDownloadProgress}
 
@@ -1097,6 +1157,8 @@ function renderSettingsWindow() {
               ? `<p class="meta">${escapeHtml(modelDetail)}</p>`
               : ""
           }
+
+          ${modelNote}
 
           ${
             !modelReady
@@ -1779,6 +1841,14 @@ function bindGeneralSettingsHandlers() {
     void startManagedModelDownload();
   });
 
+  document.querySelector<HTMLButtonElement>("#show-model-in-finder")?.addEventListener("click", () => {
+    void showManagedModelInFinder();
+  });
+
+  document.querySelector<HTMLButtonElement>("#delete-model")?.addEventListener("click", () => {
+    void deleteManagedModel();
+  });
+
   document
     .querySelector<HTMLSelectElement>("#main-language")
     ?.addEventListener("change", (event) => {
@@ -2111,7 +2181,11 @@ async function refreshManagedModelDownloadState(silent = false) {
     }
   } catch (error) {
     if (!silent) {
-      state.permissionNote = `Failed to load model download state: ${String(error)}`;
+      if (isSettingsWindow) {
+        state.modelNote = `Failed to load model download state: ${String(error)}`;
+      } else {
+        state.permissionNote = `Failed to load model download state: ${String(error)}`;
+      }
     }
   }
 
@@ -2212,6 +2286,7 @@ async function startManagedModelDownload() {
   }
 
   state.modelBusy = true;
+  state.modelNote = "";
   state.permissionNote = "";
   render();
 
@@ -2220,8 +2295,62 @@ async function startManagedModelDownload() {
     state.modelDownload = download;
     await Promise.all([refreshManagedModelDownloadState(true), refreshModelSettings(true)]);
   } catch (error) {
-    state.permissionNote =
+    const message =
       error instanceof Error ? error.message : `Model download failed: ${String(error)}`;
+    if (isSettingsWindow) {
+      state.modelNote = message;
+    } else {
+      state.permissionNote = message;
+    }
+  } finally {
+    state.modelBusy = false;
+    render();
+  }
+}
+
+async function showManagedModelInFinder() {
+  if (state.modelBusy) {
+    return;
+  }
+
+  state.modelBusy = true;
+  state.modelNote = "";
+  render();
+
+  try {
+    await invoke("reveal_managed_model_in_finder");
+  } catch (error) {
+    state.modelNote =
+      error instanceof Error ? error.message : `Failed to show the model in Finder: ${String(error)}`;
+  } finally {
+    state.modelBusy = false;
+    render();
+  }
+}
+
+async function deleteManagedModel() {
+  if (state.modelBusy) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Delete the downloaded transcription model from this Mac? You can download it again later.",
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  state.modelBusy = true;
+  state.modelNote = "";
+  render();
+
+  try {
+    const download = await invoke<ManagedModelDownloadState>("delete_managed_model");
+    state.modelDownload = download;
+    await Promise.all([refreshManagedModelDownloadState(true), refreshModelSettings(true)]);
+  } catch (error) {
+    state.modelNote =
+      error instanceof Error ? error.message : `Failed to delete the model: ${String(error)}`;
   } finally {
     state.modelBusy = false;
     render();

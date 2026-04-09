@@ -171,6 +171,7 @@ struct ModelSettingsState {
     hugging_face_resolved_path: Option<String>,
     hugging_face_ready: bool,
     hugging_face_status: String,
+    uses_managed_model: bool,
     selected_ready: bool,
     selected_reference: Option<String>,
 }
@@ -416,6 +417,64 @@ fn download_managed_model<R: tauri::Runtime>(
             }
         }
     });
+
+    snapshot_managed_model_download_state(&app, &shared)
+}
+
+#[tauri::command]
+fn reveal_managed_model_in_finder<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<(), String> {
+    let target_dir = managed_model_path(&app)?;
+    if !target_dir.exists() {
+        return Err("The transcription model has not been downloaded yet.".to_string());
+    }
+
+    reveal_path_in_file_manager(&target_dir)
+}
+
+#[tauri::command]
+fn delete_managed_model<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<ManagedModelDownloadState, String> {
+    let target_dir = managed_model_path(&app)?;
+    let shared = state.inner().managed_model_download.clone();
+
+    {
+        let download_state = shared
+            .lock()
+            .map_err(|_| "Failed to access model download state.".to_string())?;
+        if matches!(
+            download_state.status,
+            ManagedModelDownloadStatus::Downloading
+        ) {
+            return Err("The transcription model is still downloading.".to_string());
+        }
+    }
+
+    if target_dir.exists() {
+        std::fs::remove_dir_all(&target_dir).map_err(|error| {
+            format!(
+                "Failed to remove the transcription model at {}: {error}",
+                target_dir.display()
+            )
+        })?;
+    }
+
+    {
+        let mut download_state = shared
+            .lock()
+            .map_err(|_| "Failed to access model download state.".to_string())?;
+        *download_state = ManagedModelDownloadState {
+            status: ManagedModelDownloadStatus::Idle,
+            local_path: target_dir.display().to_string(),
+            current_file: None,
+            bytes_downloaded: 0,
+            total_bytes: None,
+            error: None,
+        };
+    }
 
     snapshot_managed_model_download_state(&app, &shared)
 }
@@ -851,6 +910,7 @@ fn build_model_settings_state<R: tauri::Runtime>(
             .map(|path| path.display().to_string()),
         hugging_face_ready,
         hugging_face_status,
+        uses_managed_model,
         selected_ready,
         selected_reference,
     })
@@ -1038,6 +1098,66 @@ fn managed_model_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<Pa
         .app_data_dir()
         .map(|path| path.join(MANAGED_MODEL_RELATIVE_PATH))
         .map_err(|error| error.to_string())
+}
+
+fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let status = std::process::Command::new("open")
+            .arg(path)
+            .status()
+            .map_err(|error| format!("Failed to open {} in Finder: {error}", path.display()))?;
+        if status.success() {
+            return Ok(());
+        }
+
+        return Err(format!("Failed to open {} in Finder.", path.display()));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let status = std::process::Command::new("explorer")
+            .arg(path)
+            .status()
+            .map_err(|error| {
+                format!(
+                    "Failed to open {} in File Explorer: {error}",
+                    path.display()
+                )
+            })?;
+        if status.success() {
+            return Ok(());
+        }
+
+        return Err(format!(
+            "Failed to open {} in File Explorer.",
+            path.display()
+        ));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let status = std::process::Command::new("xdg-open")
+            .arg(path)
+            .status()
+            .map_err(|error| {
+                format!(
+                    "Failed to open {} in the file manager: {error}",
+                    path.display()
+                )
+            })?;
+        if status.success() {
+            return Ok(());
+        }
+
+        return Err(format!(
+            "Failed to open {} in the file manager.",
+            path.display()
+        ));
+    }
+
+    #[allow(unreachable_code)]
+    Err("Opening the model folder is not supported on this platform.".to_string())
 }
 
 fn snapshot_managed_model_download_state<R: tauri::Runtime>(
@@ -1911,6 +2031,8 @@ pub fn run() {
             model_settings_state,
             managed_model_download_state,
             download_managed_model,
+            reveal_managed_model_in_finder,
+            delete_managed_model,
             diarization_settings_state,
             general_settings_state,
             save_model_settings,
