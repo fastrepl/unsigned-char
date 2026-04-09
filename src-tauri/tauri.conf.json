@@ -14,13 +14,9 @@
     "windows": [
       {
         "title": "unsigned char",
-        "width": 400,
-        "height": 500,
-        "minWidth": 400,
-        "minHeight": 500,
-        "maxWidth": 400,
-        "maxHeight": 500,
-        "resizable": false
+        "width": 460,
+        "height": 640,
+        "resizable": true
       }
     ],
     "security": {
