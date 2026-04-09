@@ -6,7 +6,6 @@ type PermissionStatus = "neverRequested" | "authorized" | "denied";
 type View = "home" | "meeting";
 type MeetingStatus = "live" | "done";
 type ModelSource = "bundled" | "huggingFace";
-type PyannoteModel = "precision-2" | "community-1";
 
 type OnboardingState = {
   productName: string;
@@ -61,17 +60,20 @@ type ModelDraft = {
 type DiarizationSettings = {
   enabled: boolean;
   providerLabel: string;
-  pyannoteModel: PyannoteModel;
-  pyannoteApiKeyPresent: boolean;
-  pyannoteApiKeySourceLabel: string | null;
+  pipelineRepo: string;
+  localPath: string;
+  resolvedLocalPath: string | null;
+  localReady: boolean;
+  huggingFaceTokenPresent: boolean;
+  huggingFaceTokenSourceLabel: string | null;
   ready: boolean;
   status: string;
 };
 
 type DiarizationDraft = {
   enabled: boolean;
-  pyannoteModel: PyannoteModel;
-  pyannoteApiKey: string;
+  localPath: string;
+  huggingFaceToken: string;
 };
 
 const STORE_KEY = "unsigned-char-meetings";
@@ -120,8 +122,8 @@ function emptyModelDraft(): ModelDraft {
 function emptyDiarizationDraft(): DiarizationDraft {
   return {
     enabled: false,
-    pyannoteModel: "precision-2",
-    pyannoteApiKey: "",
+    localPath: "",
+    huggingFaceToken: "",
   };
 }
 
@@ -137,8 +139,8 @@ function syncModelDraft(settings: ModelSettings) {
 function syncDiarizationDraft(settings: DiarizationSettings) {
   state.diarizationDraft = {
     enabled: settings.enabled,
-    pyannoteModel: settings.pyannoteModel,
-    pyannoteApiKey: "",
+    localPath: settings.localPath,
+    huggingFaceToken: "",
   };
 }
 
@@ -434,7 +436,7 @@ function renderSettingsWindow() {
           <p class="eyebrow">Settings</p>
           <h1>Transcription</h1>
           <p class="body">
-            Choose the bundled Qwen ASR model, point the app at a local Hugging Face snapshot, and configure pyannoteAI speaker diarization.
+            Choose the bundled Qwen ASR model, point the app at a local Hugging Face snapshot, and configure local pyannote.audio speaker diarization.
           </p>
         </header>
 
@@ -580,10 +582,11 @@ function renderDiarizationSection() {
   const note = state.diarizationNote
     ? `<p class="meta model-note">${escapeHtml(state.diarizationNote)}</p>`
     : "";
-  const keySource = settings.pyannoteApiKeySourceLabel
-    ? `<p class="meta">${escapeHtml(settings.pyannoteApiKeySourceLabel)} Leave the field blank to keep the current key.</p>`
-    : '<p class="meta">Paste a pyannoteAI API key to enable hosted speaker diarization.</p>';
+  const tokenSource = settings.huggingFaceTokenSourceLabel
+    ? `<p class="meta">${escapeHtml(settings.huggingFaceTokenSourceLabel)} Leave the field blank to keep the current token.</p>`
+    : '<p class="meta">Paste a Hugging Face access token if pyannote.audio should download the community-1 pipeline locally.</p>';
   const statusLabel = !settings.enabled ? "off" : settings.ready ? "ready" : "needs setup";
+  const resolvedPath = settings.resolvedLocalPath ?? "No local pipeline path configured.";
 
   return `
     <section class="model-card">
@@ -598,44 +601,53 @@ function renderDiarizationSection() {
       </div>
 
       <p class="meta">
-        ${escapeHtml(settings.providerLabel)} is a hosted diarization service. When the runtime is wired, the app will need to upload audio or use a signed file URL.
+        ${escapeHtml(settings.providerLabel)} runs locally through Python. The app is configured for the open-source community-1 speaker diarization pipeline.
       </p>
 
       <label class="toggle-row">
         <input id="pyannote-enabled" type="checkbox" ${draft.enabled ? "checked" : ""} />
         <span class="toggle-copy">
           <strong>Enable speaker diarization</strong>
-          <small>Use pyannoteAI to identify who spoke when.</small>
+          <small>Use local pyannote.audio diarization to identify who spoke when.</small>
         </span>
       </label>
 
+      <div class="model-path-row">
+        <span class="meta-label">Pipeline</span>
+        <code>${escapeHtml(settings.pipelineRepo)}</code>
+      </div>
+
+      <div class="model-path-row">
+        <span class="meta-label">Resolved local path</span>
+        <code>${escapeHtml(resolvedPath)}</code>
+      </div>
+
       <div class="field-row">
-        <label class="field">
-          <span class="meta-label">pyannoteAI model</span>
-          <select id="pyannote-model" class="composer-input">
-            <option value="precision-2" ${draft.pyannoteModel === "precision-2" ? "selected" : ""}>
-              precision-2
-            </option>
-            <option value="community-1" ${draft.pyannoteModel === "community-1" ? "selected" : ""}>
-              community-1
-            </option>
-          </select>
+        <label class="field field-wide">
+          <span class="meta-label">Local pipeline path</span>
+          <input
+            id="pyannote-local-path"
+            class="composer-input"
+            autocomplete="off"
+            placeholder="~/.cache/huggingface/hub/models--pyannote--speaker-diarization-community-1"
+            value="${escapeHtml(draft.localPath)}"
+          />
         </label>
 
         <label class="field field-wide">
-          <span class="meta-label">API key</span>
+          <span class="meta-label">Hugging Face access token</span>
           <input
-            id="pyannote-api-key"
+            id="pyannote-hf-token"
             class="composer-input"
             type="password"
             autocomplete="off"
-            placeholder="${settings.pyannoteApiKeyPresent ? "Leave blank to keep current key" : "Paste pyannoteAI API key"}"
-            value="${escapeHtml(draft.pyannoteApiKey)}"
+            placeholder="${settings.huggingFaceTokenPresent ? "Leave blank to keep current token" : "Paste Hugging Face token"}"
+            value="${escapeHtml(draft.huggingFaceToken)}"
           />
         </label>
       </div>
 
-      ${keySource}
+      ${tokenSource}
 
       <div class="model-footer">
         <p class="meta">${escapeHtml(settings.status)}</p>
@@ -978,19 +990,16 @@ function bindDiarizationSettingsHandlers() {
     });
 
   document
-    .querySelector<HTMLSelectElement>("#pyannote-model")
-    ?.addEventListener("change", (event) => {
-      state.diarizationDraft.pyannoteModel =
-        (event.currentTarget as HTMLSelectElement).value === "community-1"
-          ? "community-1"
-          : "precision-2";
+    .querySelector<HTMLInputElement>("#pyannote-local-path")
+    ?.addEventListener("input", (event) => {
+      state.diarizationDraft.localPath = (event.currentTarget as HTMLInputElement).value;
       state.diarizationNote = "";
     });
 
   document
-    .querySelector<HTMLInputElement>("#pyannote-api-key")
+    .querySelector<HTMLInputElement>("#pyannote-hf-token")
     ?.addEventListener("input", (event) => {
-      state.diarizationDraft.pyannoteApiKey = (event.currentTarget as HTMLInputElement).value;
+      state.diarizationDraft.huggingFaceToken = (event.currentTarget as HTMLInputElement).value;
       state.diarizationNote = "";
     });
 
@@ -1184,8 +1193,8 @@ async function saveDiarizationSettings() {
     const settings = await invoke<DiarizationSettings>("save_diarization_settings", {
       settings: {
         enabled: state.diarizationDraft.enabled,
-        pyannoteModel: state.diarizationDraft.pyannoteModel,
-        pyannoteApiKey: state.diarizationDraft.pyannoteApiKey,
+        localPath: state.diarizationDraft.localPath,
+        huggingFaceToken: state.diarizationDraft.huggingFaceToken,
       },
     });
 

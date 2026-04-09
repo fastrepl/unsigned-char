@@ -19,8 +19,10 @@ const MODEL_SETTINGS_FILE: &str = "model-settings.json";
 const DIARIZATION_SETTINGS_FILE: &str = "diarization-settings.json";
 const OPEN_SETTINGS_MENU_ID: &str = "open-settings";
 const SETTINGS_WINDOW_LABEL: &str = "settings";
-const PYANNOTE_PROVIDER_LABEL: &str = "pyannoteAI";
-const PYANNOTE_API_KEY_ENV: &str = "PYANNOTE_API_KEY";
+const PYANNOTE_PROVIDER_LABEL: &str = "pyannote.audio";
+const PYANNOTE_PIPELINE_REPO: &str = "pyannote/speaker-diarization-community-1";
+const HUGGING_FACE_TOKEN_ENV: &str = "HF_TOKEN";
+const HUGGING_FACE_ALT_TOKEN_ENV: &str = "HUGGINGFACE_TOKEN";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,13 +51,6 @@ enum ModelSource {
     HuggingFace,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-enum PyannoteModel {
-    Precision2,
-    Community1,
-}
-
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SaveModelSettingsInput {
@@ -69,8 +64,8 @@ struct SaveModelSettingsInput {
 #[serde(rename_all = "camelCase")]
 struct SaveDiarizationSettingsInput {
     enabled: bool,
-    pyannote_model: PyannoteModel,
-    pyannote_api_key: String,
+    local_path: String,
+    hugging_face_token: String,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -92,9 +87,9 @@ struct StoredDiarizationSettings {
     #[serde(default)]
     enabled: bool,
     #[serde(default)]
-    pyannote_model: Option<PyannoteModel>,
+    local_path: String,
     #[serde(default)]
-    pyannote_api_key: String,
+    hugging_face_token: String,
 }
 
 #[derive(Serialize)]
@@ -121,9 +116,12 @@ struct ModelSettingsState {
 struct DiarizationSettingsState {
     enabled: bool,
     provider_label: &'static str,
-    pyannote_model: PyannoteModel,
-    pyannote_api_key_present: bool,
-    pyannote_api_key_source_label: Option<&'static str>,
+    pipeline_repo: &'static str,
+    local_path: String,
+    resolved_local_path: Option<String>,
+    local_ready: bool,
+    hugging_face_token_present: bool,
+    hugging_face_token_source_label: Option<&'static str>,
     ready: bool,
     status: String,
 }
@@ -131,12 +129,6 @@ struct DiarizationSettingsState {
 impl Default for ModelSource {
     fn default() -> Self {
         Self::Bundled
-    }
-}
-
-impl Default for PyannoteModel {
-    fn default() -> Self {
-        Self::Precision2
     }
 }
 
@@ -152,12 +144,6 @@ impl StoredModelSettings {
 
     fn source(&self) -> ModelSource {
         self.source.unwrap_or_default()
-    }
-}
-
-impl StoredDiarizationSettings {
-    fn pyannote_model(&self) -> PyannoteModel {
-        self.pyannote_model.unwrap_or_default()
     }
 }
 
@@ -230,11 +216,11 @@ fn save_diarization_settings<R: tauri::Runtime>(
 ) -> Result<DiarizationSettingsState, String> {
     let mut stored = load_diarization_settings(&app)?;
     stored.enabled = settings.enabled;
-    stored.pyannote_model = Some(settings.pyannote_model);
+    stored.local_path = settings.local_path.trim().to_string();
 
-    let api_key = settings.pyannote_api_key.trim();
-    if !api_key.is_empty() {
-        stored.pyannote_api_key = normalize_pyannote_api_key(api_key)?;
+    let token = settings.hugging_face_token.trim();
+    if !token.is_empty() {
+        stored.hugging_face_token = normalize_hugging_face_token(token)?;
     }
 
     persist_diarization_settings(&app, &stored)?;
@@ -480,23 +466,36 @@ fn build_diarization_settings_state(
     settings: &StoredDiarizationSettings,
 ) -> Result<DiarizationSettingsState, String> {
     let enabled = settings.enabled;
-    let pyannote_model = settings.pyannote_model();
-    let (api_key, pyannote_api_key_source_label) = resolve_pyannote_api_key(settings)?;
-    let pyannote_api_key_present = !api_key.is_empty();
-    let ready = !enabled || pyannote_api_key_present;
+    let local_path = settings.local_path.trim().to_string();
+    let resolved_local_path = resolve_custom_model_path(&local_path);
+    let local_ready = resolved_local_path
+        .as_ref()
+        .map(|path| model_path_is_ready(path))
+        .unwrap_or(false);
+    let (hugging_face_token, hugging_face_token_source_label) =
+        resolve_hugging_face_token(settings)?;
+    let hugging_face_token_present = !hugging_face_token.is_empty();
+    let ready = !enabled || local_ready || hugging_face_token_present;
     let status = build_pyannote_status(
         enabled,
-        pyannote_model,
-        pyannote_api_key_present,
-        pyannote_api_key_source_label,
+        &local_path,
+        resolved_local_path.as_deref(),
+        local_ready,
+        hugging_face_token_present,
+        hugging_face_token_source_label,
     );
 
     Ok(DiarizationSettingsState {
         enabled,
         provider_label: PYANNOTE_PROVIDER_LABEL,
-        pyannote_model,
-        pyannote_api_key_present,
-        pyannote_api_key_source_label,
+        pipeline_repo: PYANNOTE_PIPELINE_REPO,
+        local_path,
+        resolved_local_path: resolved_local_path
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        local_ready,
+        hugging_face_token_present,
+        hugging_face_token_source_label,
         ready,
         status,
     })
@@ -684,10 +683,10 @@ fn normalize_hugging_face_repo(input: &str) -> Result<String, String> {
     Ok(value.to_string())
 }
 
-fn normalize_pyannote_api_key(input: &str) -> Result<String, String> {
+fn normalize_hugging_face_token(input: &str) -> Result<String, String> {
     let value = input.trim();
     if value.chars().any(char::is_whitespace) {
-        return Err("pyannoteAI API keys cannot contain spaces.".to_string());
+        return Err("Hugging Face access tokens cannot contain spaces.".to_string());
     }
 
     Ok(value.to_string())
@@ -737,60 +736,84 @@ fn format_hugging_face_reference(repo: &str, revision: &str) -> String {
     }
 }
 
-fn format_pyannote_model(model: PyannoteModel) -> &'static str {
-    match model {
-        PyannoteModel::Precision2 => "precision-2",
-        PyannoteModel::Community1 => "community-1",
-    }
-}
-
-fn resolve_pyannote_api_key(
+fn resolve_hugging_face_token(
     settings: &StoredDiarizationSettings,
 ) -> Result<(String, Option<&'static str>), String> {
-    let stored = settings.pyannote_api_key.trim();
+    let stored = settings.hugging_face_token.trim();
     if !stored.is_empty() {
         return Ok((
-            normalize_pyannote_api_key(stored)?,
-            Some("API key saved locally in app config."),
+            normalize_hugging_face_token(stored)?,
+            Some("Access token saved locally in app config."),
         ));
     }
 
-    let env_value = env::var(PYANNOTE_API_KEY_ENV).unwrap_or_default();
-    let env_value = env_value.trim();
-    if env_value.is_empty() {
-        return Ok((String::new(), None));
+    for (env_name, source_label) in [
+        (
+            HUGGING_FACE_TOKEN_ENV,
+            "Using HF_TOKEN from the environment.",
+        ),
+        (
+            HUGGING_FACE_ALT_TOKEN_ENV,
+            "Using HUGGINGFACE_TOKEN from the environment.",
+        ),
+    ] {
+        let env_value = env::var(env_name).unwrap_or_default();
+        let env_value = env_value.trim();
+        if env_value.is_empty() {
+            continue;
+        }
+
+        return Ok((normalize_hugging_face_token(env_value)?, Some(source_label)));
     }
 
-    Ok((
-        normalize_pyannote_api_key(env_value)?,
-        Some("Using PYANNOTE_API_KEY from the environment."),
-    ))
+    Ok((String::new(), None))
 }
 
 fn build_pyannote_status(
     enabled: bool,
-    model: PyannoteModel,
-    api_key_present: bool,
-    api_key_source_label: Option<&'static str>,
+    local_path: &str,
+    resolved_local_path: Option<&Path>,
+    local_ready: bool,
+    hugging_face_token_present: bool,
+    hugging_face_token_source_label: Option<&'static str>,
 ) -> String {
     if !enabled {
         return "Speaker diarization is off.".to_string();
     }
 
-    if !api_key_present {
-        return "Add a pyannoteAI API key to enable speaker diarization. pyannoteAI uses a hosted API and will need uploaded audio or a signed file URL once the runtime is wired.".to_string();
+    if let Some(path) = resolved_local_path {
+        if local_ready {
+            return format!(
+                "Using local {} pipeline from {}.",
+                PYANNOTE_PIPELINE_REPO,
+                path.display()
+            );
+        }
+
+        return format!(
+            "Found {} for {}, but no model weights were detected there.",
+            path.display(),
+            PYANNOTE_PIPELINE_REPO
+        );
+    }
+
+    if !local_path.is_empty() {
+        return format!("Local diarization path not found: {local_path}");
+    }
+
+    if !hugging_face_token_present {
+        return "Add a local community-1 snapshot path or a Hugging Face token so pyannote.audio can download the diarization pipeline locally once the runtime is wired.".to_string();
     }
 
     let mut status = format!(
-        "{} {} is configured.",
-        PYANNOTE_PROVIDER_LABEL,
-        format_pyannote_model(model)
+        "{} will download {} locally when diarization is wired.",
+        PYANNOTE_PROVIDER_LABEL, PYANNOTE_PIPELINE_REPO
     );
-    if let Some(source_label) = api_key_source_label {
+    if let Some(source_label) = hugging_face_token_source_label {
         status.push(' ');
         status.push_str(source_label);
     }
-    status.push_str(" Audio will be uploaded or referenced by URL once diarization is wired.");
+    status.push_str(" Install ffmpeg and pyannote.audio before running local diarization.");
     status
 }
 

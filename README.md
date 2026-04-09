@@ -8,7 +8,7 @@ It is meant to:
 - listen to your microphone and system audio at the same time
 - transcribe the conversation locally
 - use Qwen ASR for speech recognition
-- use pyannoteAI for speaker diarization when diarization is enabled
+- use pyannote.audio for speaker diarization when diarization is enabled
 
 ## Views
 
@@ -36,9 +36,10 @@ The app now stores model selection and resolves the default Qwen ASR path from
 bundled Tauri resources. The runtime still needs to consume that selection when
 real transcription is wired in.
 
-Speaker diarization is now configured separately through pyannoteAI, but the
-runtime still needs to upload audio and reconcile diarization results with the
-transcript when that pipeline is implemented.
+Speaker diarization is now configured separately through local
+`pyannote.audio`, but the runtime still needs a Python worker to run
+diarization and merge those speaker turns into the transcript when that
+pipeline is implemented.
 
 ## Model setup
 
@@ -62,15 +63,18 @@ platforms.
 
 ## Speaker diarization setup
 
-Speaker diarization uses [pyannoteAI](https://docs.pyannote.ai/introduction).
-Per the pyannoteAI docs, the hosted API needs an API key and processes uploaded
-audio or publicly accessible file URLs.
+Speaker diarization uses
+[`pyannote.audio`](https://github.com/pyannote/pyannote-audio) with the local
+`pyannote/speaker-diarization-community-1` pipeline.
+
+Local diarization still needs the runtime work to run Python and `ffmpeg`, but
+the app now stores the settings needed for that path.
 
 From the Settings window you can:
 
 - enable or disable speaker diarization
-- choose `precision-2` or `community-1`
-- use a saved API key or `PYANNOTE_API_KEY` from your environment
+- point the app at a local `community-1` snapshot path
+- use a saved Hugging Face token or `HF_TOKEN` / `HUGGINGFACE_TOKEN` from your environment
 
 ## Run it
 
