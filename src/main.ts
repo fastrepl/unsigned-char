@@ -73,6 +73,14 @@ type DiarizationDraft = {
   huggingFaceToken: string;
 };
 
+type GeneralSettings = {
+  mainLanguage: string;
+  spokenLanguages: string[];
+  timezone: string;
+};
+
+type GeneralDraft = GeneralSettings;
+
 type DiarizationSegment = {
   speaker: string;
   startSeconds: number;
@@ -108,6 +116,51 @@ const SETTINGS_WINDOW_LABEL = "settings";
 const currentWindow = getCurrentWindow();
 const isSettingsWindow = currentWindow.label === SETTINGS_WINDOW_LABEL;
 const LIVE_TRANSCRIPTION_POLL_MS = 1200;
+const COMMON_LANGUAGE_CODES = [
+  "en",
+  "es",
+  "fr",
+  "de",
+  "it",
+  "pt",
+  "nl",
+  "pl",
+  "ru",
+  "uk",
+  "tr",
+  "ar",
+  "hi",
+  "id",
+  "ja",
+  "ko",
+  "th",
+  "vi",
+  "zh",
+] as const;
+const COMMON_TIMEZONES = [
+  { value: "Pacific/Honolulu", label: "Hawaii", detail: "UTC-10" },
+  { value: "America/Anchorage", label: "Alaska", detail: "UTC-9" },
+  { value: "America/Los_Angeles", label: "Pacific Time", detail: "UTC-8" },
+  { value: "America/Denver", label: "Mountain Time", detail: "UTC-7" },
+  { value: "America/Chicago", label: "Central Time", detail: "UTC-6" },
+  { value: "America/New_York", label: "Eastern Time", detail: "UTC-5" },
+  { value: "America/Sao_Paulo", label: "Sao Paulo", detail: "UTC-3" },
+  { value: "Atlantic/Reykjavik", label: "Reykjavik", detail: "UTC+0" },
+  { value: "Europe/London", label: "London", detail: "UTC+0/+1" },
+  { value: "Europe/Paris", label: "Paris", detail: "UTC+1/+2" },
+  { value: "Europe/Berlin", label: "Berlin", detail: "UTC+1/+2" },
+  { value: "Africa/Cairo", label: "Cairo", detail: "UTC+2" },
+  { value: "Europe/Moscow", label: "Moscow", detail: "UTC+3" },
+  { value: "Asia/Dubai", label: "Dubai", detail: "UTC+4" },
+  { value: "Asia/Kolkata", label: "India", detail: "UTC+5:30" },
+  { value: "Asia/Bangkok", label: "Bangkok", detail: "UTC+7" },
+  { value: "Asia/Singapore", label: "Singapore", detail: "UTC+8" },
+  { value: "Asia/Shanghai", label: "China", detail: "UTC+8" },
+  { value: "Asia/Tokyo", label: "Tokyo", detail: "UTC+9" },
+  { value: "Asia/Seoul", label: "Seoul", detail: "UTC+9" },
+  { value: "Australia/Sydney", label: "Sydney", detail: "UTC+10/+11" },
+  { value: "Pacific/Auckland", label: "Auckland", detail: "UTC+12/+13" },
+] as const;
 const appRoot: HTMLElement = (() => {
   const node = document.querySelector<HTMLElement>("#app");
   if (!node) {
@@ -115,6 +168,14 @@ const appRoot: HTMLElement = (() => {
   }
   return node;
 })();
+const languageDisplayNames =
+  typeof Intl.DisplayNames === "function"
+    ? new Intl.DisplayNames(undefined, { type: "language" })
+    : null;
+const LANGUAGE_OPTIONS = COMMON_LANGUAGE_CODES.map((value) => ({
+  value,
+  label: formatLanguageLabel(value),
+}));
 
 const state = {
   view: "home" as View,
@@ -123,6 +184,9 @@ const state = {
   modelDraft: emptyModelDraft(),
   diarizationSettings: null as DiarizationSettings | null,
   diarizationDraft: emptyDiarizationDraft(),
+  generalSettings: null as GeneralSettings | null,
+  generalDraft: emptyGeneralDraft(),
+  generalSpokenLanguage: "",
   meetings: loadMeetings(),
   activeMeetingId: null as string | null,
   permissionBusy: null as PermissionKind | null,
@@ -131,6 +195,8 @@ const state = {
   modelNote: "",
   diarizationBusy: false,
   diarizationNote: "",
+  generalBusy: false,
+  generalNote: "",
   startMeetingBusy: false,
   transcriptionBusy: false,
   transcriptionRunning: false,
@@ -163,6 +229,57 @@ function emptyDiarizationDraft(): DiarizationDraft {
   };
 }
 
+function formatLanguageLabel(code: string) {
+  const value = languageDisplayNames?.of(code) ?? code;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function normalizeLanguageCode(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const lower = trimmed.toLowerCase();
+  const exactMatch = LANGUAGE_OPTIONS.find((option) => option.value === lower);
+  if (exactMatch) {
+    return exactMatch.value;
+  }
+
+  const baseLanguage = lower.split("-")[0];
+  const baseMatch = LANGUAGE_OPTIONS.find((option) => option.value === baseLanguage);
+  return baseMatch?.value ?? "";
+}
+
+function defaultMainLanguage() {
+  return normalizeLanguageCode(window.navigator.language) || "en";
+}
+
+function emptyGeneralDraft(): GeneralDraft {
+  return {
+    mainLanguage: defaultMainLanguage(),
+    spokenLanguages: [],
+    timezone: "",
+  };
+}
+
+function normalizeSpokenLanguages(languages: string[], mainLanguage: string) {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const language of languages) {
+    const code = normalizeLanguageCode(language);
+    if (!code || code === mainLanguage || seen.has(code)) {
+      continue;
+    }
+
+    seen.add(code);
+    normalized.push(code);
+  }
+
+  return normalized;
+}
+
 function syncModelDraft(settings: ModelSettings) {
   state.modelDraft = {
     source: settings.source,
@@ -178,6 +295,16 @@ function syncDiarizationDraft(settings: DiarizationSettings) {
     localPath: settings.localPath,
     huggingFaceToken: "",
   };
+}
+
+function syncGeneralDraft(settings: GeneralSettings) {
+  const mainLanguage = normalizeLanguageCode(settings.mainLanguage) || defaultMainLanguage();
+  state.generalDraft = {
+    mainLanguage,
+    spokenLanguages: normalizeSpokenLanguages(settings.spokenLanguages, mainLanguage),
+    timezone: settings.timezone.trim(),
+  };
+  state.generalSpokenLanguage = "";
 }
 
 function loadMeetings(): Meeting[] {
@@ -338,11 +465,11 @@ function createMeeting() {
 
 function buildMeetingTitle(iso: string) {
   const date = new Date(iso);
-  const datePart = date.toLocaleDateString(undefined, {
+  const datePart = formatDateValue(date, {
     month: "short",
     day: "numeric",
   });
-  const timePart = date.toLocaleTimeString(undefined, {
+  const timePart = formatTimeValue(date, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -362,22 +489,57 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function activeTimezone() {
+  const value = state.generalSettings?.timezone.trim();
+  return value || undefined;
+}
+
+function formatDateValue(date: Date, options: Intl.DateTimeFormatOptions) {
+  const timezone = activeTimezone();
+
+  try {
+    return date.toLocaleDateString(undefined, timezone ? { ...options, timeZone: timezone } : options);
+  } catch {
+    return date.toLocaleDateString(undefined, options);
+  }
+}
+
+function formatTimeValue(date: Date, options: Intl.DateTimeFormatOptions) {
+  const timezone = activeTimezone();
+
+  try {
+    return date.toLocaleTimeString(undefined, timezone ? { ...options, timeZone: timezone } : options);
+  } catch {
+    return date.toLocaleTimeString(undefined, options);
+  }
+}
+
+function formatDateTimeValue(date: Date, options: Intl.DateTimeFormatOptions) {
+  const timezone = activeTimezone();
+
+  try {
+    return date.toLocaleString(undefined, timezone ? { ...options, timeZone: timezone } : options);
+  } catch {
+    return date.toLocaleString(undefined, options);
+  }
+}
+
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, {
+  return formatTimeValue(new Date(iso), {
     hour: "numeric",
     minute: "2-digit",
   });
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return formatDateValue(new Date(iso), {
     month: "short",
     day: "numeric",
   });
 }
 
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
+  return formatDateTimeValue(new Date(iso), {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -433,7 +595,9 @@ function handleWindowKeydown(event: KeyboardEvent) {
   event.preventDefault();
 
   if (requiresAppSetup()) {
-    void openSettingsWindow();
+    const content = currentSetupBannerContent();
+    state.permissionNote = content?.copy ?? "This build is missing required transcription files.";
+    render();
     return;
   }
 
@@ -450,10 +614,10 @@ function requiresAppSetup() {
 
 function setupBannerCopy(settings: ModelSettings) {
   if (settings.source === "bundled") {
-    return "Bundled Qwen3-ASR files are missing.";
+    return "This build is missing bundled Qwen3-ASR files.";
   }
 
-  return "Choose a local Hugging Face snapshot with vocab.json and safetensors files.";
+  return "The selected custom model is missing required files.";
 }
 
 function currentSetupBannerContent() {
@@ -478,15 +642,6 @@ function meetingTranscriptLines(meeting: Meeting) {
   return lines;
 }
 
-async function openSettingsWindow() {
-  try {
-    await invoke("open_settings_window");
-  } catch (error) {
-    state.permissionNote = `Failed to open settings: ${String(error)}`;
-    render();
-  }
-}
-
 function renderSetupBanner() {
   const content = currentSetupBannerContent();
   if (!content) {
@@ -494,12 +649,11 @@ function renderSetupBanner() {
   }
 
   return `
-    <button class="setup-banner" id="open-settings-banner" type="button">
+    <div class="setup-banner">
       <span class="setup-banner-kicker">Setup required</span>
       <strong class="setup-banner-title">${escapeHtml(content.title)}</strong>
       <span class="setup-banner-copy">${escapeHtml(content.copy)}</span>
-      <span class="setup-banner-action">Open settings</span>
-    </button>
+    </div>
   `;
 }
 
@@ -572,19 +726,155 @@ function renderHome() {
 }
 
 function renderSettingsWindow() {
+  if (!state.generalSettings) {
+    return `
+      <section class="settings-shell">
+        <div class="screen settings-screen">
+          <section class="model-card">
+            <div class="model-card-header">
+              <div>
+                <p class="eyebrow">Settings</p>
+                <h2>Loading</h2>
+              </div>
+            </div>
+            <p class="meta">Loading preferences...</p>
+          </section>
+        </div>
+      </section>
+    `;
+  }
+
+  const draft = state.generalDraft;
+  const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezoneOptions =
+    draft.timezone && !COMMON_TIMEZONES.some((option) => option.value === draft.timezone)
+      ? [
+          ...COMMON_TIMEZONES,
+          { value: draft.timezone, label: draft.timezone, detail: "Custom" },
+        ]
+      : COMMON_TIMEZONES;
+  const availableSpokenLanguages = LANGUAGE_OPTIONS.filter(
+    (option) =>
+      option.value !== draft.mainLanguage &&
+      !draft.spokenLanguages.includes(option.value),
+  );
+  const spokenLanguageChips =
+    draft.spokenLanguages.length === 0
+      ? '<p class="meta">No additional spoken languages.</p>'
+      : `
+        <div class="settings-chip-list">
+          ${draft.spokenLanguages
+            .map(
+              (language) => `
+                <span class="settings-chip">
+                  ${escapeHtml(formatLanguageLabel(language))}
+                  <button
+                    class="settings-chip-remove"
+                    data-remove-spoken-language="${escapeHtml(language)}"
+                    type="button"
+                    aria-label="Remove ${escapeHtml(formatLanguageLabel(language))}"
+                  >
+                    ×
+                  </button>
+                </span>
+              `,
+            )
+            .join("")}
+        </div>
+      `;
+  const note = state.generalNote
+    ? `<p class="meta model-note">${escapeHtml(state.generalNote)}</p>`
+    : "";
+
   return `
     <section class="settings-shell">
       <div class="screen settings-screen">
         <section class="model-card">
           <div class="model-card-header">
             <div>
-              <p class="eyebrow">Settings</p>
-              <h2>No setup</h2>
+              <p class="eyebrow">Language & region</p>
+              <h2>Preferences</h2>
             </div>
           </div>
 
-          <p class="body">unsigned char is meant to work out of the box.</p>
-          <p class="meta">Transcription uses bundled Qwen3-ASR. If something needs manual setup, that should be fixed in the build instead of here.</p>
+          <div class="field-row">
+            <label class="field">
+              <span class="meta-label">Main language</span>
+              <select id="main-language" class="composer-input">
+                ${LANGUAGE_OPTIONS.map(
+                  (option) => `
+                    <option value="${escapeHtml(option.value)}" ${
+                      option.value === draft.mainLanguage ? "selected" : ""
+                    }>
+                      ${escapeHtml(option.label)}
+                    </option>
+                  `,
+                ).join("")}
+              </select>
+              <span class="meta">Used for summaries, chats, and AI-generated responses.</span>
+            </label>
+
+            <label class="field">
+              <span class="meta-label">Timezone</span>
+              <select id="timezone" class="composer-input">
+                <option value="">System default (${escapeHtml(systemTimezone)})</option>
+                ${timezoneOptions.map(
+                  (option) => `
+                    <option value="${escapeHtml(option.value)}" ${
+                      option.value === draft.timezone ? "selected" : ""
+                    }>
+                      ${escapeHtml(`${option.label} (${option.detail})`)}
+                    </option>
+                  `,
+                ).join("")}
+              </select>
+              <span class="meta">Overrides how meeting timestamps are shown.</span>
+            </label>
+          </div>
+
+          <div class="field">
+            <span class="meta-label">Spoken languages</span>
+            <span class="meta">Add other languages you speak besides the main language.</span>
+            ${spokenLanguageChips}
+            <div class="field-row settings-inline-row">
+              <label class="field">
+                <select id="spoken-language-select" class="composer-input">
+                  <option value="">Add language</option>
+                  ${availableSpokenLanguages.map(
+                    (option) => `
+                      <option value="${escapeHtml(option.value)}" ${
+                        option.value === state.generalSpokenLanguage ? "selected" : ""
+                      }>
+                        ${escapeHtml(option.label)}
+                      </option>
+                    `,
+                  ).join("")}
+                </select>
+              </label>
+              <button
+                class="button secondary"
+                id="add-spoken-language"
+                type="button"
+                ${state.generalSpokenLanguage ? "" : "disabled"}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          <div class="model-footer">
+            <p class="meta">Transcription model configuration is fixed by the app build, not this screen.</p>
+            <button
+              class="button secondary"
+              id="save-general-settings"
+              type="button"
+              ${state.generalBusy ? "disabled" : ""}
+            >
+              ${state.generalBusy ? "Saving..." : "Save"}
+            </button>
+          </div>
+
+          ${note}
         </section>
       </div>
     </section>
@@ -980,6 +1270,7 @@ function updateHomeScrollChip() {
 
 function bindViewHandlers() {
   if (isSettingsWindow) {
+    bindGeneralSettingsHandlers();
     return;
   }
 
@@ -999,12 +1290,6 @@ function bindViewHandlers() {
     document.querySelector<HTMLButtonElement>("#new-meeting")?.addEventListener("click", () => {
       void startMeeting();
     });
-
-    document
-      .querySelector<HTMLButtonElement>("#open-settings-banner")
-      ?.addEventListener("click", () => {
-        void openSettingsWindow();
-      });
 
     document.querySelector<HTMLButtonElement>("#scroll-home-top")?.addEventListener("click", () => {
       homeScreen?.scrollTo({ top: 0, behavior: "smooth" });
@@ -1187,6 +1472,83 @@ function bindViewHandlers() {
     });
 }
 
+function bindGeneralSettingsHandlers() {
+  document
+    .querySelector<HTMLSelectElement>("#main-language")
+    ?.addEventListener("change", (event) => {
+      const nextMainLanguage =
+        normalizeLanguageCode((event.currentTarget as HTMLSelectElement).value) ||
+        defaultMainLanguage();
+      state.generalDraft.mainLanguage = nextMainLanguage;
+      state.generalDraft.spokenLanguages = normalizeSpokenLanguages(
+        state.generalDraft.spokenLanguages,
+        nextMainLanguage,
+      );
+
+      if (state.generalSpokenLanguage === nextMainLanguage) {
+        state.generalSpokenLanguage = "";
+      }
+
+      state.generalNote = "";
+      render();
+    });
+
+  document
+    .querySelector<HTMLSelectElement>("#timezone")
+    ?.addEventListener("change", (event) => {
+      state.generalDraft.timezone = (event.currentTarget as HTMLSelectElement).value.trim();
+      state.generalNote = "";
+      render();
+    });
+
+  document
+    .querySelector<HTMLSelectElement>("#spoken-language-select")
+    ?.addEventListener("change", (event) => {
+      state.generalSpokenLanguage = normalizeLanguageCode(
+        (event.currentTarget as HTMLSelectElement).value,
+      );
+      state.generalNote = "";
+      render();
+    });
+
+  document
+    .querySelector<HTMLButtonElement>("#add-spoken-language")
+    ?.addEventListener("click", () => {
+      if (!state.generalSpokenLanguage) {
+        return;
+      }
+
+      state.generalDraft.spokenLanguages = normalizeSpokenLanguages(
+        [...state.generalDraft.spokenLanguages, state.generalSpokenLanguage],
+        state.generalDraft.mainLanguage,
+      );
+      state.generalSpokenLanguage = "";
+      state.generalNote = "";
+      render();
+    });
+
+  document.querySelectorAll<HTMLElement>("[data-remove-spoken-language]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const value = button.dataset.removeSpokenLanguage;
+      if (!value) {
+        return;
+      }
+
+      state.generalDraft.spokenLanguages = state.generalDraft.spokenLanguages.filter(
+        (language) => language !== value,
+      );
+      state.generalNote = "";
+      render();
+    });
+  });
+
+  document
+    .querySelector<HTMLButtonElement>("#save-general-settings")
+    ?.addEventListener("click", () => {
+      void saveGeneralSettings();
+    });
+}
+
 async function refreshPermissions(silent = false) {
   try {
     const onboarding = await invoke<OnboardingState>("onboarding_state");
@@ -1222,6 +1584,20 @@ async function refreshDiarizationSettings(silent = false) {
   } catch (error) {
     if (!silent) {
       state.diarizationNote = `Failed to load diarization settings: ${String(error)}`;
+    }
+  }
+
+  render();
+}
+
+async function refreshGeneralSettings(silent = false) {
+  try {
+    const settings = await invoke<GeneralSettings>("general_settings_state");
+    state.generalSettings = settings;
+    syncGeneralDraft(settings);
+  } catch (error) {
+    if (!silent) {
+      state.generalNote = `Failed to load settings: ${String(error)}`;
     }
   }
 
@@ -1381,6 +1757,41 @@ async function runMeetingDiarization() {
   }
 }
 
+async function saveGeneralSettings() {
+  if (state.generalBusy) {
+    return;
+  }
+
+  state.generalBusy = true;
+  state.generalNote = "";
+  render();
+
+  const mainLanguage = normalizeLanguageCode(state.generalDraft.mainLanguage) || defaultMainLanguage();
+  const spokenLanguages = normalizeSpokenLanguages(
+    state.generalDraft.spokenLanguages,
+    mainLanguage,
+  );
+
+  try {
+    const settings = await invoke<GeneralSettings>("save_general_settings", {
+      settings: {
+        mainLanguage,
+        spokenLanguages,
+        timezone: state.generalDraft.timezone.trim(),
+      },
+    });
+
+    state.generalSettings = settings;
+    syncGeneralDraft(settings);
+    state.generalNote = "Saved.";
+  } catch (error) {
+    state.generalNote = `Settings save failed: ${String(error)}`;
+  } finally {
+    state.generalBusy = false;
+    render();
+  }
+}
+
 async function saveMeetingAsMarkdown(meeting: Meeting) {
   if (state.saveBusy) {
     return;
@@ -1421,6 +1832,7 @@ function handleAppFocus() {
   }
 
   void Promise.all([
+    refreshGeneralSettings(true),
     refreshPermissions(true),
     refreshModelSettings(true),
     refreshDiarizationSettings(true),
@@ -1430,13 +1842,14 @@ function handleAppFocus() {
 window.addEventListener("DOMContentLoaded", async () => {
   render();
   if (isSettingsWindow) {
-    await Promise.all([refreshModelSettings(true), refreshDiarizationSettings(true)]);
+    await refreshGeneralSettings(true);
     return;
   }
 
   window.addEventListener("keydown", handleWindowKeydown);
   window.addEventListener("focus", handleAppFocus);
   await Promise.all([
+    refreshGeneralSettings(true),
     refreshPermissions(true),
     refreshModelSettings(true),
     refreshDiarizationSettings(true),

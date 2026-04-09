@@ -398,11 +398,9 @@ h2 {
   color: var(--text);
   text-align: left;
   box-shadow: var(--shadow);
-  cursor: pointer;
   transition:
     border-color 120ms ease,
     background-color 120ms ease,
-    transform 120ms ease,
     box-shadow 120ms ease;
 }
 
@@ -411,11 +409,9 @@ h2 {
   background:
     linear-gradient(135deg, rgba(24, 24, 27, 0.08), rgba(24, 24, 27, 0.03)),
     var(--surface);
-  transform: translateY(-1px);
 }
 
-.setup-banner-kicker,
-.setup-banner-action {
+.setup-banner-kicker {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -434,10 +430,6 @@ h2 {
 .setup-banner-copy {
   color: var(--text-soft);
   line-height: 1.5;
-}
-
-.setup-banner-action {
-  color: var(--text);
 }
 
 .scroll-top-chip {
@@ -632,6 +624,46 @@ h2 {
 .field {
   flex: 1;
   min-width: 0;
+}
+
+.settings-inline-row {
+  align-items: flex-end;
+}
+
+.settings-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.settings-chip-remove:hover {
+  color: var(--text);
 }
 
 .field-wide {

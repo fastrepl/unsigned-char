@@ -19,6 +19,7 @@ const APP_NAME: &str = "unsigned char";
 const BUNDLED_MODEL_NAME: &str = "Bundled Qwen3-ASR";
 const BUNDLED_MODEL_RELATIVE_PATH: &str = "models/qwen-asr";
 const PYANNOTE_RUNNER_RELATIVE_PATH: &str = "scripts/pyannote_diarize.py";
+const GENERAL_SETTINGS_FILE: &str = "general-settings.json";
 const MODEL_SETTINGS_FILE: &str = "model-settings.json";
 const DIARIZATION_SETTINGS_FILE: &str = "diarization-settings.json";
 const OPEN_SETTINGS_MENU_ID: &str = "open-settings";
@@ -86,6 +87,14 @@ struct SaveDiarizationSettingsInput {
     hugging_face_token: String,
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveGeneralSettingsInput {
+    main_language: String,
+    spoken_languages: Vec<String>,
+    timezone: String,
+}
+
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredModelSettings {
@@ -108,6 +117,17 @@ struct StoredDiarizationSettings {
     local_path: String,
     #[serde(default)]
     hugging_face_token: String,
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredGeneralSettings {
+    #[serde(default)]
+    main_language: String,
+    #[serde(default)]
+    spoken_languages: Vec<String>,
+    #[serde(default)]
+    timezone: String,
 }
 
 #[derive(Serialize)]
@@ -142,6 +162,14 @@ struct DiarizationSettingsState {
     hugging_face_token_source_label: Option<&'static str>,
     ready: bool,
     status: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeneralSettingsState {
+    main_language: String,
+    spoken_languages: Vec<String>,
+    timezone: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -179,6 +207,31 @@ impl StoredModelSettings {
 
     fn source(&self) -> ModelSource {
         self.source.unwrap_or_default()
+    }
+}
+
+impl StoredGeneralSettings {
+    fn from_input(input: SaveGeneralSettingsInput) -> Self {
+        let main_language = input.main_language.trim().to_string();
+        let mut spoken_languages = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+
+        for language in input.spoken_languages {
+            let language = language.trim().to_string();
+            if language.is_empty() || language == main_language {
+                continue;
+            }
+
+            if seen.insert(language.clone()) {
+                spoken_languages.push(language);
+            }
+        }
+
+        Self {
+            main_language,
+            spoken_languages,
+            timezone: input.timezone.trim().to_string(),
+        }
     }
 }
 
@@ -234,6 +287,13 @@ fn diarization_settings_state<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+fn general_settings_state<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<GeneralSettingsState, String> {
+    build_general_settings_state(&load_general_settings(&app)?)
+}
+
+#[tauri::command]
 fn save_model_settings<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     settings: SaveModelSettingsInput,
@@ -259,6 +319,16 @@ fn save_diarization_settings<R: tauri::Runtime>(
 
     persist_diarization_settings(&app, &stored)?;
     build_diarization_settings_state(&stored)
+}
+
+#[tauri::command]
+fn save_general_settings<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    settings: SaveGeneralSettingsInput,
+) -> Result<GeneralSettingsState, String> {
+    let settings = StoredGeneralSettings::from_input(settings);
+    persist_general_settings(&app, &settings)?;
+    build_general_settings_state(&settings)
 }
 
 #[tauri::command]
@@ -639,6 +709,22 @@ fn build_diarization_settings_state(
     })
 }
 
+fn build_general_settings_state(
+    settings: &StoredGeneralSettings,
+) -> Result<GeneralSettingsState, String> {
+    Ok(GeneralSettingsState {
+        main_language: settings.main_language.trim().to_string(),
+        spoken_languages: settings
+            .spoken_languages
+            .iter()
+            .map(|language| language.trim())
+            .filter(|language| !language.is_empty())
+            .map(str::to_string)
+            .collect(),
+        timezone: settings.timezone.trim().to_string(),
+    })
+}
+
 fn load_model_settings<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<StoredModelSettings, String> {
@@ -662,6 +748,18 @@ fn load_diarization_settings<R: tauri::Runtime>(
     let contents = std::fs::read(&path).map_err(|error| error.to_string())?;
     serde_json::from_slice(&contents)
         .map_err(|error| format!("Invalid diarization settings: {error}"))
+}
+
+fn load_general_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<StoredGeneralSettings, String> {
+    let path = general_settings_path(app)?;
+    if !path.exists() {
+        return Ok(StoredGeneralSettings::default());
+    }
+
+    let contents = std::fs::read(&path).map_err(|error| error.to_string())?;
+    serde_json::from_slice(&contents).map_err(|error| format!("Invalid general settings: {error}"))
 }
 
 fn persist_model_settings<R: tauri::Runtime>(
@@ -690,6 +788,27 @@ fn persist_diarization_settings<R: tauri::Runtime>(
     let contents = serde_json::to_vec_pretty(settings)
         .map_err(|error| format!("Failed to encode diarization settings: {error}"))?;
     std::fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+fn persist_general_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    settings: &StoredGeneralSettings,
+) -> Result<(), String> {
+    let path = general_settings_path(app)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let contents = serde_json::to_vec_pretty(settings)
+        .map_err(|error| format!("Failed to encode general settings: {error}"))?;
+    std::fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+fn general_settings_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|path| path.join(GENERAL_SETTINGS_FILE))
+        .map_err(|error| error.to_string())
 }
 
 fn model_settings_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
@@ -1226,8 +1345,10 @@ pub fn run() {
             open_settings_window,
             model_settings_state,
             diarization_settings_state,
+            general_settings_state,
             save_model_settings,
             save_diarization_settings,
+            save_general_settings,
             run_local_diarization,
             save_meeting_markdown,
             start_live_transcription,
