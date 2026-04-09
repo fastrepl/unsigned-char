@@ -95,10 +95,16 @@ type LocalDiarizationResult = {
 };
 
 type MarkdownExport = {
+  id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   status: MeetingStatus;
+  audioPath: string;
+  diarizationSpeakerCount: number;
+  diarizationPipelineSource: string | null;
+  diarizationRanAt: string | null;
+  path: string | null;
   transcript: string;
   speakerTurns: string;
 };
@@ -116,6 +122,8 @@ const SETTINGS_WINDOW_LABEL = "settings";
 const currentWindow = getCurrentWindow();
 const isSettingsWindow = currentWindow.label === SETTINGS_WINDOW_LABEL;
 const LIVE_TRANSCRIPTION_POLL_MS = 1200;
+const MEETING_MARKDOWN_SYNC_MS = 250;
+const MARKDOWN_SAVE_ERROR_PREFIX = "Markdown save failed:";
 const COMMON_LANGUAGE_CODES = [
   "en",
   "es",
@@ -203,7 +211,6 @@ const state = {
   liveTranscriptText: "",
   recordingMeetingId: null as string | null,
   diarizationRunBusy: false,
-  saveBusy: false,
   meetingNote: "",
   meetingOverlayBusy: false,
   meetingOverlayEnabled: false,
@@ -211,6 +218,7 @@ const state = {
 };
 
 let liveTranscriptionPollId: number | null = null;
+const meetingMarkdownSyncTimers = new Map<string, number>();
 
 function emptyModelDraft(): ModelDraft {
   return {
@@ -411,6 +419,92 @@ function distinctSpeakerCount(segments: DiarizationSegment[]) {
   return new Set(segments.map((segment) => segment.speaker)).size;
 }
 
+function buildMarkdownExport(meeting: Meeting): MarkdownExport {
+  return {
+    id: meeting.id,
+    title: meeting.title,
+    createdAt: meeting.createdAt,
+    updatedAt: meeting.updatedAt,
+    status: meeting.status,
+    audioPath: meeting.audioPath.trim(),
+    diarizationSpeakerCount: meeting.diarizationSpeakerCount,
+    diarizationPipelineSource: meeting.diarizationPipelineSource,
+    diarizationRanAt: meeting.diarizationRanAt,
+    path: meeting.exportPath,
+    transcript: meetingTranscriptLines(meeting).join("\n\n"),
+    speakerTurns: formatSpeakerTurnsMarkdown(meeting),
+  };
+}
+
+function setMeetingExportPath(id: string, path: string) {
+  let changed = false;
+  state.meetings = state.meetings.map((meeting) => {
+    if (meeting.id !== id || meeting.exportPath === path) {
+      return meeting;
+    }
+
+    changed = true;
+    return {
+      ...meeting,
+      exportPath: path,
+    };
+  });
+
+  if (changed) {
+    persistMeetings();
+  }
+}
+
+async function syncMeetingMarkdown(id: string) {
+  const meeting = state.meetings.find((candidate) => candidate.id === id);
+  if (!meeting) {
+    return;
+  }
+
+  try {
+    const path = await invoke<string>("sync_meeting_markdown", {
+      export: buildMarkdownExport(meeting),
+    });
+    setMeetingExportPath(id, path);
+
+    if (state.activeMeetingId === id && state.meetingNote.startsWith(MARKDOWN_SAVE_ERROR_PREFIX)) {
+      state.meetingNote = "";
+      render();
+    }
+  } catch (error) {
+    if (state.activeMeetingId !== id) {
+      return;
+    }
+
+    state.meetingNote = `${MARKDOWN_SAVE_ERROR_PREFIX} ${String(error)}`;
+    render();
+  }
+}
+
+function scheduleMeetingMarkdownSync(meeting: Meeting) {
+  if (isSettingsWindow) {
+    return;
+  }
+
+  const existingTimer = meetingMarkdownSyncTimers.get(meeting.id);
+  if (typeof existingTimer === "number") {
+    window.clearTimeout(existingTimer);
+  }
+
+  const nextTimer = window.setTimeout(() => {
+    meetingMarkdownSyncTimers.delete(meeting.id);
+    void syncMeetingMarkdown(meeting.id);
+  }, MEETING_MARKDOWN_SYNC_MS);
+
+  meetingMarkdownSyncTimers.set(meeting.id, nextTimer);
+}
+
+function queueLoadedMeetingMarkdownSync() {
+  state.meetings.forEach((meeting) => {
+    scheduleMeetingMarkdownSync(meeting);
+  });
+}
+
 function persistMeetings() {
   window.localStorage.setItem(STORE_KEY, JSON.stringify(state.meetings));
 }
@@ -431,10 +525,19 @@ function getRecordingMeeting() {
 }
 
 function updateMeeting(id: string, updater: (meeting: Meeting) => Meeting) {
-  state.meetings = state.meetings.map((meeting) =>
-    meeting.id === id ? updater(meeting) : meeting,
-  );
+  let updatedMeeting: Meeting | null = null;
+  state.meetings = state.meetings.map((meeting) => {
+    if (meeting.id !== id) {
+      return meeting;
+    }
+
+    updatedMeeting = updater(meeting);
+    return updatedMeeting;
+  });
   persistMeetings();
+  if (updatedMeeting) {
+    scheduleMeetingMarkdownSync(updatedMeeting);
+  }
 }
 
 function createMeeting() {
@@ -459,6 +562,7 @@ function createMeeting() {
   state.recordingMeetingId = meeting.id;
   state.view = "meeting";
   persistMeetings();
+  scheduleMeetingMarkdownSync(meeting);
   render();
   return meeting;
 }
@@ -1013,31 +1117,32 @@ function renderMeeting() {
   return `
     <section class="screen meeting">
       <header class="meeting-header">
-        <div class="meeting-nav">
-          <button class="back-button" id="back-home" type="button">
-            <svg class="button-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M10.5 3.5L6 8l4.5 4.5"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <span>Back</span>
-          </button>
-        </div>
         <div class="meeting-heading">
-          <h1 class="meeting-title">
-            <input
-              id="meeting-title-input"
-              class="meeting-title-input"
-              type="text"
-              value="${escapeHtml(meeting.title)}"
-              aria-label="Meeting title"
-              spellcheck="false"
-            />
-          </h1>
+          <div class="meeting-title-row">
+            <button class="back-button meeting-title-back" id="back-home" type="button" aria-label="Back">
+              <svg class="button-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M10.5 3.5L6 8l4.5 4.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <h1 class="meeting-title">
+              <span class="meeting-title-field">
+                <input
+                  id="meeting-title-input"
+                  class="meeting-title-input"
+                  type="text"
+                  value="${escapeHtml(meeting.title)}"
+                  aria-label="Meeting title"
+                  spellcheck="false"
+                />
+              </span>
+            </h1>
+          </div>
           <p class="meeting-subtitle">
             <span>${formatTime(meeting.createdAt)}</span>
           </p>
@@ -1059,11 +1164,6 @@ function renderMeeting() {
               `
           }
         </button>
-        <button class="button secondary" id="save-markdown" type="button" ${
-          state.saveBusy ? "disabled" : ""
-        }>
-          ${state.saveBusy ? "Saving..." : "Save .md"}
-        </button>
       </div>
 
       <section class="transcript-panel" id="transcript-panel">
@@ -1072,7 +1172,7 @@ function renderMeeting() {
 
       ${renderMeetingDiarizationPanel(meeting)}
 
-      <p class="meta meeting-note">${escapeHtml(state.meetingNote || meeting.exportPath || "")}</p>
+      <p class="meta meeting-note">${escapeHtml(state.meetingNote)}</p>
     </section>
   `;
 }
@@ -1373,15 +1473,6 @@ function bindViewHandlers() {
         render();
       }
     });
-
-  document.querySelector<HTMLButtonElement>("#save-markdown")?.addEventListener("click", () => {
-    const currentMeeting = getActiveMeeting();
-    if (!currentMeeting) {
-      return;
-    }
-
-    void saveMeetingAsMarkdown(currentMeeting);
-  });
 
   const titleInput = document.querySelector<HTMLInputElement>("#meeting-title-input");
   const commitTitle = () => {
@@ -1769,40 +1860,6 @@ async function saveGeneralSettings() {
   }
 }
 
-async function saveMeetingAsMarkdown(meeting: Meeting) {
-  if (state.saveBusy) {
-    return;
-  }
-
-  state.saveBusy = true;
-  state.meetingNote = "";
-  render();
-
-  const exportPayload: MarkdownExport = {
-    title: meeting.title,
-    createdAt: meeting.createdAt,
-    updatedAt: meeting.updatedAt,
-    status: meeting.status,
-    transcript: meetingTranscriptLines(meeting).join("\n\n"),
-    speakerTurns: formatSpeakerTurnsMarkdown(meeting),
-  };
-
-  try {
-    const path = await invoke<string>("save_meeting_markdown", { export: exportPayload });
-    updateMeeting(meeting.id, (current) => ({
-      ...current,
-      exportPath: path,
-      updatedAt: new Date().toISOString(),
-    }));
-    state.meetingNote = `Saved to ${path}`;
-  } catch (error) {
-    state.meetingNote = `Save failed: ${String(error)}`;
-  } finally {
-    state.saveBusy = false;
-    render();
-  }
-}
-
 function handleAppFocus() {
   if (isSettingsWindow) {
     return;
@@ -1823,6 +1880,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  queueLoadedMeetingMarkdownSync();
   window.addEventListener("keydown", handleWindowKeydown);
   window.addEventListener("focus", handleAppFocus);
   await Promise.all([

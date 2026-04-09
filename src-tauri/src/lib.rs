@@ -47,10 +47,21 @@ struct OnboardingState {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MarkdownExport {
+    id: String,
     title: String,
     created_at: String,
     updated_at: String,
     status: String,
+    #[serde(default)]
+    audio_path: String,
+    #[serde(default)]
+    diarization_speaker_count: usize,
+    #[serde(default)]
+    diarization_pipeline_source: Option<String>,
+    #[serde(default)]
+    diarization_ran_at: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
     transcript: String,
     #[serde(default)]
     speaker_turns: String,
@@ -397,7 +408,7 @@ fn run_local_diarization<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-fn save_meeting_markdown<R: tauri::Runtime>(
+fn sync_meeting_markdown<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     export: MarkdownExport,
 ) -> Result<String, String> {
@@ -409,12 +420,20 @@ fn save_meeting_markdown<R: tauri::Runtime>(
 
     std::fs::create_dir_all(&target_dir).map_err(|error| error.to_string())?;
 
-    let file_name = format!(
-        "{}-{}.md",
-        sanitize_path_component(&export.title),
-        sanitize_path_component(&export.created_at)
-    );
-    let file_path = unique_path(target_dir.join(file_name));
+    let file_path = export
+        .path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let file_name = format!("meeting-{}.md", sanitize_path_component(&export.id));
+            target_dir.join(file_name)
+        });
+
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
 
     std::fs::write(&file_path, build_markdown(&export)).map_err(|error| error.to_string())?;
 
@@ -1255,23 +1274,46 @@ fn resolve_selected_model_path<R: tauri::Runtime>(
 }
 
 fn build_markdown(export: &MarkdownExport) -> String {
+    let title = export.title.trim();
+    let transcript = if export.transcript.trim().is_empty() {
+        "_No transcript yet._".to_string()
+    } else {
+        export.transcript.trim().to_string()
+    };
+    let speaker_turns = if export.speaker_turns.trim().is_empty() {
+        "_No speaker turns yet._".to_string()
+    } else {
+        export.speaker_turns.trim().to_string()
+    };
+
     format!(
-        "# {title}\n\n- Created: {created_at}\n- Updated: {updated_at}\n- Status: {status}\n\n## Transcript\n\n{transcript}\n\n## Speaker Turns\n\n{speaker_turns}\n",
-        title = export.title.trim(),
-        created_at = export.created_at.trim(),
-        updated_at = export.updated_at.trim(),
-        status = export.status.trim(),
-        transcript = if export.transcript.trim().is_empty() {
-            "_No transcript yet._".to_string()
-        } else {
-            export.transcript.trim().to_string()
-        },
-        speaker_turns = if export.speaker_turns.trim().is_empty() {
-            "_No speaker turns yet._".to_string()
-        } else {
-            export.speaker_turns.trim().to_string()
-        }
+        "---\nid: {id}\ntitle: {frontmatter_title}\ncreated_at: {created_at}\nupdated_at: {updated_at}\nstatus: {status}\naudio_path: {audio_path}\ndiarization_speaker_count: {diarization_speaker_count}\ndiarization_pipeline_source: {diarization_pipeline_source}\ndiarization_ran_at: {diarization_ran_at}\n---\n\n# {title}\n\n## Transcript\n\n{transcript}\n\n## Speaker Turns\n\n{speaker_turns}\n",
+        id = yaml_string(&export.id),
+        frontmatter_title = yaml_string(title),
+        created_at = yaml_string(export.created_at.trim()),
+        updated_at = yaml_string(export.updated_at.trim()),
+        status = yaml_string(export.status.trim()),
+        audio_path = yaml_optional_string(Some(export.audio_path.trim())),
+        diarization_speaker_count = export.diarization_speaker_count,
+        diarization_pipeline_source =
+            yaml_optional_string(export.diarization_pipeline_source.as_deref()),
+        diarization_ran_at = yaml_optional_string(export.diarization_ran_at.as_deref()),
+        title = title,
+        transcript = transcript,
+        speaker_turns = speaker_turns
     )
+}
+
+fn yaml_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+}
+
+fn yaml_optional_string(value: Option<&str>) -> String {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(yaml_string)
+        .unwrap_or_else(|| "null".to_string())
 }
 
 fn sanitize_path_component(input: &str) -> String {
@@ -1300,31 +1342,6 @@ fn sanitize_path_component(input: &str) -> String {
     }
 }
 
-fn unique_path(path: PathBuf) -> PathBuf {
-    if !path.exists() {
-        return path;
-    }
-
-    let stem = path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("meeting");
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or("md");
-    let parent = path.parent().map(PathBuf::from).unwrap_or_default();
-
-    for index in 2..1000 {
-        let candidate = parent.join(format!("{stem}-{index}.{extension}"));
-        if !candidate.exists() {
-            return candidate;
-        }
-    }
-
-    parent.join(format!("{stem}-copy.{extension}"))
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1350,7 +1367,7 @@ pub fn run() {
             save_diarization_settings,
             save_general_settings,
             run_local_diarization,
-            save_meeting_markdown,
+            sync_meeting_markdown,
             start_live_transcription,
             live_transcription_state,
             stop_live_transcription
