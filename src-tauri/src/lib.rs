@@ -712,18 +712,21 @@ fn live_transcription_state(state: State<'_, AppState>) -> Result<LiveTranscript
 }
 
 #[tauri::command]
-fn stop_live_transcription<R: tauri::Runtime>(
+async fn stop_live_transcription<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<LiveTranscriptionState, String> {
-    let snapshot = state
-        .inner()
-        .transcription
-        .lock()
-        .map_err(|_| "Failed to access transcription state.".to_string())?
-        .stop()?;
-    refresh_selected_model_preload(&app, &state.inner().transcription);
-    Ok(snapshot)
+    let transcription = state.inner().transcription.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let snapshot = transcription
+            .lock()
+            .map_err(|_| "Failed to access transcription state.".to_string())?
+            .stop()?;
+        refresh_selected_model_preload(&app, &transcription);
+        Ok(snapshot)
+    })
+    .await
+    .map_err(|error| "Failed to join transcription shutdown task: ".to_owned() + &error.to_string())?
 }
 
 fn refresh_selected_model_preload<R: tauri::Runtime>(
