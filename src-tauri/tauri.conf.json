@@ -20,6 +20,7 @@
         "height": 640,
         "alwaysOnTop": true,
         "resizable": true,
+        "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "transparent": false
       }

@@ -93,6 +93,7 @@ const insetPanelClass =
   "rounded-[calc(var(--radius)-4px)] border border-[color:var(--border)] bg-[color:var(--secondary)] px-4 py-3";
 const emptyStateClass =
   "rounded-[var(--radius)] border border-dashed border-[color:var(--border-strong)] bg-[color:var(--secondary)] px-6 py-8 text-center";
+const windowShellHeightClass = "h-[calc(100vh-4.75rem)]";
 
 type SearchableOption = {
   value: string;
@@ -425,7 +426,8 @@ function SpokenLanguagesCombobox({
 
 function RootLayout() {
   return (
-    <div className="relative isolate min-h-screen w-full px-4 py-5 text-zinc-900">
+    <div className="relative isolate min-h-screen w-full px-4 pb-5 pt-14 text-zinc-900">
+      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-12" />
       <Outlet />
     </div>
   );
@@ -438,7 +440,7 @@ function HomeScreen() {
   const setupBanner = currentSetupBannerContent(snapshot);
 
   return (
-    <section className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[780px] flex-col gap-4">
+    <section className={cn("mx-auto flex max-w-[780px] flex-col gap-4", windowShellHeightClass)}>
       <header className="flex items-center justify-between gap-4">
         <BrandWordmark className="shrink-0" />
         <Button
@@ -651,7 +653,7 @@ function MeetingScreen() {
 
   if (!meeting) {
     return (
-      <section className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[760px] items-center justify-center">
+      <section className={cn("mx-auto flex max-w-[760px] items-center justify-center", windowShellHeightClass)}>
         <Card>
           <CardHeader className="items-center px-8 py-8 text-center">
             <CardTitle>Meeting not found</CardTitle>
@@ -680,7 +682,9 @@ function MeetingScreen() {
     !diarizationEnabled ? "off" : diarizationReady ? "ready" : "needs setup";
 
   return (
-    <section className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[760px] flex-col gap-4 overflow-y-auto pr-1">
+    <section
+      className={cn("mx-auto flex max-w-[760px] flex-col gap-4 overflow-y-auto pr-1", windowShellHeightClass)}
+    >
       <header className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
           <Button
@@ -892,7 +896,7 @@ function SettingsScreen() {
 
   if (!snapshot.generalSettings) {
     return (
-      <section className="mx-auto flex h-[calc(100vh-2.5rem)] max-w-[760px] items-center">
+      <section className={cn("mx-auto flex max-w-[760px] items-center", windowShellHeightClass)}>
         <Card className="w-full">
           <CardHeader className="px-8 py-8">
             <CardDescription>Loading preferences...</CardDescription>
@@ -918,7 +922,8 @@ function SettingsScreen() {
   return (
     <section
       className={cn(
-        "mx-auto flex h-[calc(100vh-2.5rem)] flex-col gap-6 overflow-y-auto",
+        "mx-auto flex flex-col gap-6 overflow-y-auto",
+        windowShellHeightClass,
         isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]",
       )}
     >
