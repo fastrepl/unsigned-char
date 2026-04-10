@@ -461,7 +461,7 @@ function HomeScreen() {
         >
           <span className="inline-flex items-center gap-2">
             <span className="inline-flex size-2 rounded-full bg-rose-400 shadow-[0_0_0_4px_rgba(244,63,94,0.12)]" />
-            <span>{snapshot.startMeetingBusy ? "Starting..." : "New meeting"}</span>
+            <span className="text-white">{snapshot.startMeetingBusy ? "Starting..." : "New meeting"}</span>
           </span>
           <Kbd className="border-white/10 bg-white/10 text-white/80">{NEW_MEETING_SHORTCUT}</Kbd>
         </Button>
