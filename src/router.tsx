@@ -426,9 +426,11 @@ function SpokenLanguagesCombobox({
 
 function RootLayout() {
   return (
-    <div className="relative isolate min-h-screen w-full px-4 pb-5 pt-14 text-zinc-900">
-      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-12" />
-      <Outlet />
+    <div className="relative isolate min-h-screen w-full text-zinc-900">
+      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-14" />
+      <div className="px-4 pb-5 pt-14">
+        <Outlet />
+      </div>
     </div>
   );
 }
