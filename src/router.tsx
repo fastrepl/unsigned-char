@@ -116,7 +116,7 @@ const insetPanelClass =
   "rounded-[calc(var(--radius)-4px)] border border-[color:var(--border)] bg-[color:var(--secondary)] px-4 py-3";
 const emptyStateClass =
   "rounded-[var(--radius)] border border-dashed border-[color:var(--border-strong)] bg-[color:var(--secondary)] px-6 py-8 text-center";
-const windowShellHeightClass = "h-[calc(100vh-4.75rem)]";
+const windowShellHeightClass = "h-[calc(100vh-3.75rem)]";
 const appWindow = getCurrentWindow();
 
 type SearchableOption = {
@@ -477,7 +477,7 @@ function SpokenLanguagesCombobox({
 function RootLayout() {
   return (
     <div className="isolate min-h-screen w-full text-zinc-900">
-      <WindowDragRegion className="h-14 w-full" />
+      <WindowDragRegion className="h-10 w-full" />
       <div className="px-4 pb-5">
         <Outlet />
       </div>
