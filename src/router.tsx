@@ -14,6 +14,13 @@ import { type KeyboardEvent, type MouseEvent, type ReactNode, useMemo, useState 
 
 import brandWordmark from "./assets/brand-wordmark.svg";
 import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "./components/number-field";
+import {
   Badge,
   Button,
   Card,
@@ -918,19 +925,24 @@ function MeetingScreen() {
                   <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
                     Speaker count
                   </span>
-                  <Input
-                    type="number"
-                    uiSize="lg"
+                  <NumberField
+                    className="mt-2"
                     min={1}
                     step={1}
-                    inputMode="numeric"
-                    value={meeting.requestedSpeakerCount ?? ""}
-                    onChange={(event) => {
-                      appStore.updateMeetingRequestedSpeakerCount(meeting.id, event.target.value);
+                    value={meeting.requestedSpeakerCount}
+                    onValueChange={(value) => {
+                      appStore.updateMeetingRequestedSpeakerCount(
+                        meeting.id,
+                        value === null ? "" : String(value),
+                      );
                     }}
-                    placeholder="Auto"
-                    className="mt-2"
-                  />
+                  >
+                    <NumberFieldGroup>
+                      <NumberFieldDecrement />
+                      <NumberFieldInput placeholder="Auto" aria-label="Speaker count" />
+                      <NumberFieldIncrement />
+                    </NumberFieldGroup>
+                  </NumberField>
                 </label>
               </div>
 
