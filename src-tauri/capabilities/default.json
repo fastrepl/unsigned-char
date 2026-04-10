@@ -5,7 +5,6 @@
   "windows": ["main", "settings"],
   "permissions": [
     "core:default",
-    "core:window:allow-set-always-on-top",
     "core:window:allow-start-dragging"
   ]
 }

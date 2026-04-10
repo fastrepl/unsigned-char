@@ -911,21 +911,6 @@ function syncModelDownloadPolling() {
   }, MODEL_DOWNLOAD_POLL_MS);
 }
 
-async function ensureWindowAlwaysOnTop() {
-  try {
-    await currentWindow.setAlwaysOnTop(true);
-  } catch (error) {
-    if (!isSettingsWindow) {
-      patch({
-        meetingNote:
-          error instanceof Error
-            ? `Always on top failed: ${error.message}`
-            : `Always on top failed: ${String(error)}`,
-      });
-    }
-  }
-}
-
 async function refreshPermissions(silent = false) {
   try {
     const onboarding = await invoke<OnboardingState>("onboarding_state");
@@ -1473,8 +1458,6 @@ async function startManagedModelDownload() {
 }
 
 function handleAppFocus() {
-  void ensureWindowAlwaysOnTop();
-
   if (isSettingsWindow) {
     void Promise.all([
       refreshGeneralSettings(true),
@@ -1653,7 +1636,7 @@ async function start() {
   window.addEventListener("keydown", handleWindowKeydown);
 
   if (isSettingsWindow) {
-    await Promise.all([ensureWindowAlwaysOnTop(), currentWindow.show(), currentWindow.setFocus()]);
+    await Promise.all([currentWindow.show(), currentWindow.setFocus()]);
     await Promise.all([
       refreshGeneralSettings(true),
       refreshManagedModelDownloadState(true),
@@ -1663,7 +1646,6 @@ async function start() {
     return;
   }
 
-  void ensureWindowAlwaysOnTop();
   queueLoadedMeetingMarkdownSync();
   window.addEventListener("focus", handleAppFocus);
   await Promise.all([
