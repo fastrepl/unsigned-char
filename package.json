@@ -11,7 +11,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:debug-app": "tauri build --debug && open 'src-tauri/target/debug/bundle/macos/unsigned char.app'"
+    "tauri:debug-app": "tauri build --debug && open 'src-tauri/target/debug/bundle/macos/unsigned {char}.app'"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.168.10",

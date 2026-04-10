@@ -54,7 +54,7 @@ function IconClose() {
 }
 
 function BrandWordmark({ className }: { className?: string }) {
-  return <img src={brandWordmark} alt="unsigned char" className={cn("block h-7 w-auto", className)} />;
+  return <img src={brandWordmark} alt="unsigned {char}" className={cn("block h-7 w-auto", className)} />;
 }
 
 function Surface({
@@ -614,7 +614,7 @@ function HomeScreen() {
                           action: () => {
                             if (
                               !window.confirm(
-                                `Delete "${meeting.title}" from unsigned char? This also removes its saved markdown export.`,
+                                `Delete "${meeting.title}" from unsigned {char}? This also removes its saved markdown export.`,
                               )
                             ) {
                               return;

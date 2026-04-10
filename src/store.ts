@@ -631,7 +631,7 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
     return {
       kicker: "Downloading model",
       title: "Transcription model setup in progress",
-      copy: "unsigned char is downloading Qwen3-ASR once and storing it locally on this Mac.",
+      copy: "unsigned {char} is downloading Qwen3-ASR once and storing it locally on this Mac.",
       detail: progress,
       localPath,
       actionLabel: null,

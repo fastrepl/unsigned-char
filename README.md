@@ -1,6 +1,6 @@
-![unsigned char](.github/assets/uchar.jpg)
+![unsigned {char}](.github/assets/uchar.jpg)
 
-# unsigned char
+# unsigned {char}
 
 If you want the real thing, use [Char](https://github.com/fastrepl/char).
 
@@ -28,5 +28,5 @@ Bundled app builds include `uchar` inside the app bundle:
 If you want `uchar` on your `PATH`:
 
 ```bash
-ln -sf "/Applications/unsigned char.app/Contents/MacOS/uchar" /opt/homebrew/bin/uchar
+ln -sf "/Applications/unsigned {char}.app/Contents/MacOS/uchar" /opt/homebrew/bin/uchar
 ```
