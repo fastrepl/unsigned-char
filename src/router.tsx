@@ -48,7 +48,7 @@ function IconChevronDown() {
 }
 
 function IconBack() {
-  return <ChevronLeft className="size-4" strokeWidth={1.5} aria-hidden="true" />;
+  return <ChevronLeft className="size-5" strokeWidth={1.5} aria-hidden="true" />;
 }
 
 function IconClose() {
