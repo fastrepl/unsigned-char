@@ -237,7 +237,7 @@ export function NumberFieldInput({
         }
       }}
       className={cn(
-        "min-w-0 flex-1 border-x border-[color:var(--border)] bg-transparent px-3 text-center text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)] disabled:cursor-not-allowed disabled:text-zinc-400",
+        "min-w-0 flex-1 border-x border-[color:var(--border)] bg-transparent px-3 text-center text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)] disabled:cursor-not-allowed disabled:opacity-100 disabled:text-zinc-400 disabled:placeholder:text-zinc-400",
         className,
       )}
     />

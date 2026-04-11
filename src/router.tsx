@@ -908,12 +908,12 @@ function MeetingScreen() {
         >
           <NumberFieldGroup>
             <NumberFieldDecrement />
-            <div className="flex min-w-0 flex-1 items-center justify-center gap-2 border-x border-[color:var(--border)] px-3 text-zinc-500">
+            <div className="grid min-w-0 flex-1 grid-cols-[auto_auto] items-center justify-center gap-2 border-x border-[color:var(--border)] px-3 text-zinc-500">
               <Users className="size-4 shrink-0" strokeWidth={1.8} aria-hidden="true" />
               <NumberFieldInput
                 placeholder="Auto"
                 aria-label="Participants"
-                className="min-w-[2.75rem] flex-none border-0 px-0 text-left"
+                className="w-[3.25rem] min-w-0 flex-none border-0 bg-transparent px-0 text-center placeholder:text-center"
               />
             </div>
             <NumberFieldIncrement />
