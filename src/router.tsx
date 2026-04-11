@@ -47,6 +47,7 @@ import {
   appStore,
   currentSetupBannerContent,
   formatDateTime,
+  formatRelativeDate,
   getMeetingTranscriptLines,
   getTimezoneOptions,
   isSettingsWindow,
@@ -784,7 +785,7 @@ function MeetingTitleField({
       value={draft}
       spellCheck={false}
       aria-label="Meeting title"
-      className="w-full bg-transparent text-[clamp(1.5rem,2vw,2rem)] font-semibold tracking-[-0.04em] text-zinc-950 outline-none"
+      className="w-full bg-transparent text-[clamp(1.9rem,2.5vw,2.7rem)] leading-tight font-semibold tracking-[-0.045em] text-zinc-950 outline-none"
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         appStore.updateMeetingTitle(meetingId, draft);
@@ -882,25 +883,31 @@ function MeetingScreen() {
   );
 
   return (
-    <section className={cn("mx-auto flex max-w-[760px] flex-col gap-4 overflow-hidden", windowShellHeightClass)}>
-      <WindowDragRegion className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div data-window-drag="false">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="shrink-0"
-                aria-label="Back"
-                onClick={() => {
-                  navigate({ to: "/" });
-                }}
-              >
-                <IconBack />
-              </Button>
-            </div>
-            <p className="truncate text-sm text-zinc-600">{formatDateTime(meeting.createdAt)}</p>
+    <section className={cn("mx-auto flex max-w-[760px] flex-col gap-5 overflow-hidden", windowShellHeightClass)}>
+      <WindowDragRegion className="flex flex-col gap-5">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+          <div data-window-drag="false">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0"
+              aria-label="Back"
+              onClick={() => {
+                navigate({ to: "/" });
+              }}
+            >
+              <IconBack />
+            </Button>
           </div>
+
+          <div className="min-w-0">
+            <p className="flex min-w-0 items-center justify-center gap-2 text-center text-sm text-zinc-600">
+              <span className="truncate">{formatDateTime(meeting.createdAt)}</span>
+              <span className="shrink-0 text-zinc-400">·</span>
+              <span className="shrink-0 text-zinc-500">{formatRelativeDate(meeting.createdAt)}</span>
+            </p>
+          </div>
+
           <div data-window-drag="false">
             <Button
               variant="secondary"
@@ -927,32 +934,15 @@ function MeetingScreen() {
           </div>
         </div>
 
-        <div className="min-w-0 pl-[3.25rem]" data-window-drag="false">
+        <div className="min-w-0" data-window-drag="false">
           <MeetingTitleField key={meeting.id} meetingId={meeting.id} title={meeting.title} />
         </div>
       </WindowDragRegion>
 
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <Button
-          variant={meeting.status === "live" ? "destructive" : "outline"}
-          disabled={snapshot.transcriptionBusy}
-          onClick={() => {
-            void appStore.toggleMeetingStatus(meeting.id);
-          }}
-        >
-          {meeting.status === "live" ? (
-            "End live"
-          ) : (
-            <>
-              <span className="inline-flex size-2 rounded-full bg-rose-400 shadow-[0_0_0_4px_rgba(244,63,94,0.12)]" />
-              <span>Resume listening</span>
-            </>
-          )}
-        </Button>
-
-        <label className="block w-full max-w-[176px]">
+      <div className="grid gap-4 md:grid-cols-[200px_minmax(0,1fr)] md:items-end">
+        <label className="block w-full max-w-[200px]">
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-            Speaker count
+            Participants count
           </span>
           <NumberField
             className="mt-2"
@@ -969,11 +959,32 @@ function MeetingScreen() {
           >
             <NumberFieldGroup>
               <NumberFieldDecrement />
-              <NumberFieldInput placeholder="Auto" aria-label="Speaker count" />
+              <NumberFieldInput placeholder="Auto" aria-label="Participants count" />
               <NumberFieldIncrement />
             </NumberFieldGroup>
           </NumberField>
         </label>
+
+        <div className="flex items-end justify-start md:justify-end">
+          <Button
+            size="lg"
+            variant={meeting.status === "live" ? "destructive" : "outline"}
+            className="min-w-[190px]"
+            disabled={snapshot.transcriptionBusy}
+            onClick={() => {
+              void appStore.toggleMeetingStatus(meeting.id);
+            }}
+          >
+            {meeting.status === "live" ? (
+              "Stop listening"
+            ) : (
+              <>
+                <span className="inline-flex size-2 rounded-full bg-rose-400 shadow-[0_0_0_4px_rgba(244,63,94,0.12)]" />
+                <span>Resume listening</span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4 pb-4 pr-5">

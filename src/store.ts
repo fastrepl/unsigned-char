@@ -505,6 +505,27 @@ function formatDateTimeValue(date: Date, options: Intl.DateTimeFormatOptions) {
   }
 }
 
+function formatDatePartsValue(date: Date) {
+  const timezone = activeTimezone();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    ...(timezone ? { timeZone: timezone } : {}),
+  });
+  const parts = formatter.formatToParts(date);
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? date.getFullYear());
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? date.getMonth() + 1);
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? date.getDate());
+
+  return { year, month, day };
+}
+
+function dayNumberValue(date: Date) {
+  const { year, month, day } = formatDatePartsValue(date);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
 export function formatDate(iso: string) {
   return formatDateValue(new Date(iso), {
     month: "short",
@@ -519,6 +540,28 @@ export function formatDateTime(iso: string) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+export function formatRelativeDate(iso: string) {
+  const difference = dayNumberValue(new Date(iso)) - dayNumberValue(new Date());
+
+  if (typeof Intl.RelativeTimeFormat === "function") {
+    return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(difference, "day");
+  }
+
+  if (difference === 0) {
+    return "today";
+  }
+
+  if (difference === -1) {
+    return "yesterday";
+  }
+
+  if (difference === 1) {
+    return "tomorrow";
+  }
+
+  return difference < 0 ? `${Math.abs(difference)} days ago` : `in ${difference} days`;
 }
 
 export function formatClockSeconds(seconds: number) {
