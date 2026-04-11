@@ -135,7 +135,13 @@ function isMeetingDeleteDisabled(
   return transcriptionBusy || recordingMeetingId === meeting.id || meeting.status === "live";
 }
 
-function getMeetingActionMenuItems(meeting: Meeting, deleteDisabled: boolean): MenuItemDef[] {
+type DeleteMeetingRequest = Pick<Meeting, "id" | "title">;
+
+function getMeetingActionMenuItems(
+  meeting: Meeting,
+  deleteDisabled: boolean,
+  onDeleteRequested: (meeting: DeleteMeetingRequest) => void,
+): MenuItemDef[] {
   return [
     {
       id: `show-meeting-in-finder-${meeting.id}`,
@@ -150,18 +156,57 @@ function getMeetingActionMenuItems(meeting: Meeting, deleteDisabled: boolean): M
       text: "Delete meeting",
       disabled: deleteDisabled,
       action: () => {
-        if (
-          !window.confirm(
-            `Delete "${meeting.title}" from unsigned {char}? This also removes its saved markdown export.`,
-          )
-        ) {
-          return;
-        }
-
-        void appStore.deleteMeeting(meeting.id);
+        onDeleteRequested({ id: meeting.id, title: meeting.title });
       },
     },
   ];
+}
+
+function DeleteMeetingDialog({
+  meeting,
+  onCancel,
+  onConfirm,
+}: {
+  meeting: DeleteMeetingRequest | null;
+  onCancel: () => void;
+  onConfirm: (meetingId: string) => void;
+}) {
+  if (!meeting) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-zinc-950/20 p-4 backdrop-blur-[2px] sm:items-center"
+      onClick={onCancel}
+      role="presentation"
+    >
+      <Card
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-meeting-title"
+        aria-describedby="delete-meeting-description"
+        className="w-full max-w-md"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <CardHeader>
+          <CardTitle id="delete-meeting-title">Delete meeting?</CardTitle>
+          <CardDescription id="delete-meeting-description">
+            Delete &quot;{meeting.title}&quot; from unsigned {"{char}"}? This also removes its
+            saved markdown export.
+          </CardDescription>
+        </CardHeader>
+        <CardFooter className="justify-end">
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={() => onConfirm(meeting.id)}>
+            Delete
+          </Button>
+        </CardFooter>
+      </Card>
+    </div>
+  );
 }
 
 const insetPanelClass =
@@ -540,6 +585,7 @@ function RootLayout() {
 function HomeScreen() {
   const snapshot = useAppState();
   const navigate = useNavigate();
+  const [meetingPendingDelete, setMeetingPendingDelete] = useState<DeleteMeetingRequest | null>(null);
   const meetings = sortedMeetings(snapshot.meetings);
   const setupBanner = currentSetupBannerContent(snapshot);
 
@@ -650,7 +696,10 @@ function HomeScreen() {
                     });
                   }}
                   onContextMenu={(event) => {
-                    void showNativeContextMenu(getMeetingActionMenuItems(meeting, deleteDisabled), event);
+                    void showNativeContextMenu(
+                      getMeetingActionMenuItems(meeting, deleteDisabled, setMeetingPendingDelete),
+                      event,
+                    );
                   }}
                 >
                   <Card className="transition hover:-translate-y-px hover:shadow-[0_1px_2px_rgba(15,23,42,0.08),0_22px_46px_rgba(15,23,42,0.1)]">
@@ -669,7 +718,16 @@ function HomeScreen() {
           </div>
         )}
       </div>
-
+      <DeleteMeetingDialog
+        meeting={meetingPendingDelete}
+        onCancel={() => {
+          setMeetingPendingDelete(null);
+        }}
+        onConfirm={(meetingId) => {
+          setMeetingPendingDelete(null);
+          void appStore.deleteMeeting(meetingId);
+        }}
+      />
     </section>
   );
 }
@@ -714,6 +772,7 @@ function MeetingTitleField({
 function MeetingScreen() {
   const snapshot = useAppState();
   const navigate = useNavigate();
+  const [meetingPendingDelete, setMeetingPendingDelete] = useState<DeleteMeetingRequest | null>(null);
   const { meetingId } = useParams({ from: "/meeting/$meetingId" });
   const meeting = snapshot.meetings.find((candidate) => candidate.id === meetingId) ?? null;
 
@@ -796,13 +855,16 @@ function MeetingScreen() {
               onClick={(event) => {
                 const rect = event.currentTarget.getBoundingClientRect();
 
-                void showNativeMenu(getMeetingActionMenuItems(meeting, deleteDisabled), {
-                  event,
-                  at: {
-                    x: rect.left,
-                    y: rect.bottom + 6,
+                void showNativeMenu(
+                  getMeetingActionMenuItems(meeting, deleteDisabled, setMeetingPendingDelete),
+                  {
+                    event,
+                    at: {
+                      x: rect.left,
+                      y: rect.bottom + 6,
+                    },
                   },
-                });
+                );
               }}
             >
               <IconMore />
@@ -945,6 +1007,16 @@ function MeetingScreen() {
           ) : null}
         </div>
       </div>
+      <DeleteMeetingDialog
+        meeting={meetingPendingDelete}
+        onCancel={() => {
+          setMeetingPendingDelete(null);
+        }}
+        onConfirm={(targetMeetingId) => {
+          setMeetingPendingDelete(null);
+          void appStore.deleteMeeting(targetMeetingId);
+        }}
+      />
     </section>
   );
 }
