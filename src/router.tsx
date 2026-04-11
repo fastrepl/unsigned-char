@@ -651,17 +651,6 @@ function HomeScreen() {
         )}
       </div>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        className={cn("self-center", snapshot.homeScrollTop > 40 ? "opacity-100" : "opacity-0")}
-        onClick={() => {
-          const scroller = document.querySelector<HTMLElement>("#home-content");
-          scroller?.scrollTo({ top: 0, behavior: "smooth" });
-        }}
-      >
-        Go to top
-      </Button>
     </section>
   );
 }
