@@ -773,7 +773,7 @@ function MeetingTitleField({
       value={draft}
       spellCheck={false}
       aria-label="Meeting title"
-      className="w-full bg-transparent text-[40px] leading-tight font-semibold tracking-[-0.045em] text-zinc-950 outline-none"
+      className="w-full bg-transparent text-[56px] leading-[1.05] font-semibold tracking-[-0.045em] text-zinc-950 outline-none"
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         appStore.updateMeetingTitle(meetingId, draft);
