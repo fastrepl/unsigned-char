@@ -10,7 +10,14 @@ import {
 } from "@tanstack/react-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ChevronDown, ChevronLeft, Ellipsis } from "lucide-react";
-import { type KeyboardEvent, type MouseEvent, type ReactNode, useMemo, useState } from "react";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffectEvent,
+  useMemo,
+  useState,
+} from "react";
 
 import brandWordmark from "./assets/brand-wordmark.svg";
 import {
@@ -591,6 +598,13 @@ function HomeScreen() {
   const meetings = sortedMeetings(snapshot.meetings);
   const setupBanner = currentSetupBannerContent(snapshot);
   const homeScrollFade = useScrollFade<HTMLDivElement>();
+  const attachHomeContentRef = useEffectEvent((node: HTMLDivElement | null) => {
+    homeScrollFade.attachRef(node);
+
+    if (node) {
+      node.scrollTop = snapshot.homeScrollTop;
+    }
+  });
 
   return (
     <section className={cn("mx-auto flex max-w-[780px] flex-col gap-4", windowShellHeightClass)}>
@@ -622,13 +636,7 @@ function HomeScreen() {
         <div
           id="home-content"
           className="h-full overflow-y-auto px-4 pt-4 pr-5 pb-4"
-          ref={(node) => {
-            homeScrollFade.attachRef(node);
-
-            if (node) {
-              node.scrollTop = snapshot.homeScrollTop;
-            }
-          }}
+          ref={attachHomeContentRef}
           onScroll={(event) => {
             homeScrollFade.handleScroll(event);
             appStore.setHomeScrollTop(event.currentTarget.scrollTop);
@@ -790,6 +798,17 @@ function MeetingScreen() {
   const transcriptScrollFade = useScrollFade<HTMLElement>();
   const { meetingId } = useParams({ from: "/meeting/$meetingId" });
   const meeting = snapshot.meetings.find((candidate) => candidate.id === meetingId) ?? null;
+  const attachTranscriptRef = useEffectEvent((node: HTMLElement | null) => {
+    transcriptScrollFade.attachRef(node);
+
+    if (!node) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+  });
 
   if (!meeting) {
     return (
@@ -942,17 +961,7 @@ function MeetingScreen() {
             <div className="relative h-full">
               <section
                 className="h-full overflow-y-auto p-4"
-                ref={(node) => {
-                  transcriptScrollFade.attachRef(node);
-
-                  if (!node) {
-                    return;
-                  }
-
-                  window.requestAnimationFrame(() => {
-                    node.scrollTop = node.scrollHeight;
-                  });
-                }}
+                ref={attachTranscriptRef}
                 onScroll={transcriptScrollFade.handleScroll}
               >
                 {showTranscriptPermissionPrompt ? (
