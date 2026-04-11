@@ -34,9 +34,10 @@ const MANAGED_MODEL_FILES: &[&str] = &[
     "vocab.json",
 ];
 const PYANNOTE_RUNNER_RELATIVE_PATH: &str = "scripts/pyannote_diarize.py";
-const GENERAL_SETTINGS_FILE: &str = "general-settings.json";
-const MODEL_SETTINGS_FILE: &str = "model-settings.json";
-const DIARIZATION_SETTINGS_FILE: &str = "diarization-settings.json";
+const SETTINGS_CONFIG_FILE: &str = "settings.json";
+const LEGACY_GENERAL_SETTINGS_FILE: &str = "general-settings.json";
+const LEGACY_MODEL_SETTINGS_FILE: &str = "model-settings.json";
+const LEGACY_DIARIZATION_SETTINGS_FILE: &str = "diarization-settings.json";
 const OPEN_SETTINGS_MENU_ID: &str = "open-settings";
 const SETTINGS_WINDOW_LABEL: &str = "settings";
 const PYANNOTE_PROVIDER_LABEL: &str = "pyannote.audio";
@@ -157,6 +158,17 @@ struct StoredGeneralSettings {
     spoken_languages: Vec<String>,
     #[serde(default)]
     timezone: String,
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredAppSettings {
+    #[serde(default)]
+    general: StoredGeneralSettings,
+    #[serde(default)]
+    model: StoredModelSettings,
+    #[serde(default)]
+    diarization: StoredDiarizationSettings,
 }
 
 #[derive(Serialize)]
@@ -1058,16 +1070,125 @@ fn build_general_settings_state(
 fn load_model_settings<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<StoredModelSettings, String> {
+    Ok(load_app_settings(app)?.model)
+}
+
+fn load_diarization_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<StoredDiarizationSettings, String> {
+    Ok(load_app_settings(app)?.diarization)
+}
+
+fn load_general_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<StoredGeneralSettings, String> {
+    Ok(load_app_settings(app)?.general)
+}
+
+fn persist_model_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    settings: &StoredModelSettings,
+) -> Result<(), String> {
+    let mut app_settings = load_app_settings(app)?;
+    app_settings.model = settings.clone();
+    persist_app_settings(app, &app_settings)
+}
+
+fn persist_diarization_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    settings: &StoredDiarizationSettings,
+) -> Result<(), String> {
+    let mut app_settings = load_app_settings(app)?;
+    app_settings.diarization = settings.clone();
+    persist_app_settings(app, &app_settings)
+}
+
+fn persist_general_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    settings: &StoredGeneralSettings,
+) -> Result<(), String> {
+    let mut app_settings = load_app_settings(app)?;
+    app_settings.general = settings.clone();
+    persist_app_settings(app, &app_settings)
+}
+
+fn load_app_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<StoredAppSettings, String> {
+    let path = settings_config_path(app)?;
+    if path.exists() {
+        let contents = std::fs::read(&path).map_err(|error| error.to_string())?;
+        return serde_json::from_slice(&contents)
+            .map_err(|error| format!("Invalid settings config: {error}"));
+    }
+
+    Ok(StoredAppSettings {
+        general: load_legacy_general_settings(app)?,
+        model: load_legacy_model_settings(app)?,
+        diarization: load_legacy_diarization_settings(app)?,
+    })
+}
+
+fn persist_app_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    settings: &StoredAppSettings,
+) -> Result<(), String> {
+    let path = settings_config_path(app)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let contents = serde_json::to_vec_pretty(settings)
+        .map_err(|error| format!("Failed to encode settings config: {error}"))?;
+    std::fs::write(path, contents).map_err(|error| error.to_string())?;
+    cleanup_legacy_settings_files(app);
+    Ok(())
+}
+
+fn settings_config_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|path| path.join(SETTINGS_CONFIG_FILE))
+        .map_err(|error| error.to_string())
+}
+
+fn general_settings_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|path| path.join(LEGACY_GENERAL_SETTINGS_FILE))
+        .map_err(|error| error.to_string())
+}
+
+fn model_settings_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|path| path.join(LEGACY_MODEL_SETTINGS_FILE))
+        .map_err(|error| error.to_string())
+}
+
+fn diarization_settings_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|path| path.join(LEGACY_DIARIZATION_SETTINGS_FILE))
+        .map_err(|error| error.to_string())
+}
+
+fn load_legacy_model_settings<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<StoredModelSettings, String> {
     let path = model_settings_path(app)?;
     if !path.exists() {
         return Ok(StoredModelSettings::default());
     }
 
     let contents = std::fs::read(&path).map_err(|error| error.to_string())?;
-    serde_json::from_slice(&contents).map_err(|error| format!("Invalid model settings: {error}"))
+    serde_json::from_slice(&contents)
+        .map_err(|error| format!("Invalid legacy model settings: {error}"))
 }
 
-fn load_diarization_settings<R: tauri::Runtime>(
+fn load_legacy_diarization_settings<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<StoredDiarizationSettings, String> {
     let path = diarization_settings_path(app)?;
@@ -1077,10 +1198,10 @@ fn load_diarization_settings<R: tauri::Runtime>(
 
     let contents = std::fs::read(&path).map_err(|error| error.to_string())?;
     serde_json::from_slice(&contents)
-        .map_err(|error| format!("Invalid diarization settings: {error}"))
+        .map_err(|error| format!("Invalid legacy diarization settings: {error}"))
 }
 
-fn load_general_settings<R: tauri::Runtime>(
+fn load_legacy_general_settings<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<StoredGeneralSettings, String> {
     let path = general_settings_path(app)?;
@@ -1089,72 +1210,22 @@ fn load_general_settings<R: tauri::Runtime>(
     }
 
     let contents = std::fs::read(&path).map_err(|error| error.to_string())?;
-    serde_json::from_slice(&contents).map_err(|error| format!("Invalid general settings: {error}"))
+    serde_json::from_slice(&contents)
+        .map_err(|error| format!("Invalid legacy general settings: {error}"))
 }
 
-fn persist_model_settings<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    settings: &StoredModelSettings,
-) -> Result<(), String> {
-    let path = model_settings_path(app)?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+fn cleanup_legacy_settings_files<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let paths = [
+        general_settings_path(app),
+        model_settings_path(app),
+        diarization_settings_path(app),
+    ];
+
+    for path in paths.into_iter().flatten() {
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
     }
-
-    let contents = serde_json::to_vec_pretty(settings)
-        .map_err(|error| format!("Failed to encode settings: {error}"))?;
-    std::fs::write(path, contents).map_err(|error| error.to_string())
-}
-
-fn persist_diarization_settings<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    settings: &StoredDiarizationSettings,
-) -> Result<(), String> {
-    let path = diarization_settings_path(app)?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let contents = serde_json::to_vec_pretty(settings)
-        .map_err(|error| format!("Failed to encode diarization settings: {error}"))?;
-    std::fs::write(path, contents).map_err(|error| error.to_string())
-}
-
-fn persist_general_settings<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    settings: &StoredGeneralSettings,
-) -> Result<(), String> {
-    let path = general_settings_path(app)?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-
-    let contents = serde_json::to_vec_pretty(settings)
-        .map_err(|error| format!("Failed to encode general settings: {error}"))?;
-    std::fs::write(path, contents).map_err(|error| error.to_string())
-}
-
-fn general_settings_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_config_dir()
-        .map(|path| path.join(GENERAL_SETTINGS_FILE))
-        .map_err(|error| error.to_string())
-}
-
-fn model_settings_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_config_dir()
-        .map(|path| path.join(MODEL_SETTINGS_FILE))
-        .map_err(|error| error.to_string())
-}
-
-fn diarization_settings_path<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> Result<PathBuf, String> {
-    app.path()
-        .app_config_dir()
-        .map(|path| path.join(DIARIZATION_SETTINGS_FILE))
-        .map_err(|error| error.to_string())
 }
 
 fn resolve_bundled_model_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> PathBuf {
