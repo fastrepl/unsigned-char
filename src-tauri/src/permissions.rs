@@ -16,14 +16,14 @@ const GRANTED: isize = 0;
 const DENIED: isize = 1;
 const NEVER_REQUESTED: isize = 2;
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionKind {
     Microphone,
     SystemAudio,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionStatus {
     NeverRequested,

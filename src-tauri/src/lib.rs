@@ -1,4 +1,5 @@
 mod asr;
+mod logging;
 mod permissions;
 
 use std::{
@@ -13,8 +14,9 @@ use permissions::{PermissionKind, PermissionSnapshot};
 use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu},
-    Manager, State, WebviewUrl, WebviewWindowBuilder,
+    Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder,
 };
+use tracing::{error, info, warn};
 
 const APP_NAME: &str = "unsigned char";
 const APP_DISPLAY_NAME: &str = "unsigned {char}";
@@ -92,7 +94,7 @@ struct RunLocalDiarizationInput {
     speaker_count: Option<usize>,
 }
 
-#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 enum ModelSource {
     #[default]
@@ -343,12 +345,26 @@ fn onboarding_state<R: tauri::Runtime>(
 
 #[tauri::command]
 fn request_permission(permission: PermissionKind) -> Result<permissions::PermissionStatus, String> {
-    permissions::request(permission)
+    let result = permissions::request(permission);
+
+    match &result {
+        Ok(status) => info!(?permission, ?status, "Updated permission status"),
+        Err(message) => error!(?permission, %message, "Failed to update permission status"),
+    }
+
+    result
 }
 
 #[tauri::command]
 fn open_permission_settings(permission: PermissionKind) -> Result<(), String> {
-    permissions::open_settings(permission)
+    let result = permissions::open_settings(permission);
+
+    match &result {
+        Ok(()) => info!(?permission, "Opened macOS permission settings"),
+        Err(message) => error!(?permission, %message, "Failed to open macOS permission settings"),
+    }
+
+    result
 }
 
 #[tauri::command]
@@ -381,6 +397,10 @@ fn download_managed_model<R: tauri::Runtime>(
     let transcription = state.inner().transcription.clone();
 
     if model_path_is_ready(&target_dir) {
+        info!(
+            target_dir = %target_dir.display(),
+            "Managed transcription model already available",
+        );
         let mut download_state = shared
             .lock()
             .map_err(|_| "Failed to access model download state.".to_string())?;
@@ -403,6 +423,10 @@ fn download_managed_model<R: tauri::Runtime>(
             download_state.status,
             ManagedModelDownloadStatus::Downloading
         ) {
+            info!(
+                target_dir = %target_dir.display(),
+                "Managed transcription model download already in progress",
+            );
             return Ok(download_state.clone());
         }
 
@@ -416,11 +440,21 @@ fn download_managed_model<R: tauri::Runtime>(
         };
     }
 
+    info!(
+        target_dir = %target_dir.display(),
+        "Starting managed transcription model download",
+    );
+
     std::thread::spawn({
         let shared = shared.clone();
         let app = app.clone();
         move || {
             if let Err(error) = download_managed_model_snapshot(&target_dir, &shared) {
+                error!(
+                    target_dir = %target_dir.display(),
+                    %error,
+                    "Managed transcription model download failed",
+                );
                 if let Ok(mut download_state) = shared.lock() {
                     *download_state = ManagedModelDownloadState {
                         status: ManagedModelDownloadStatus::Error,
@@ -434,6 +468,10 @@ fn download_managed_model<R: tauri::Runtime>(
                 return;
             }
 
+            info!(
+                target_dir = %target_dir.display(),
+                "Managed transcription model download finished",
+            );
             refresh_selected_model_preload(&app, &transcription);
         }
     });
@@ -450,6 +488,10 @@ fn reveal_managed_model_in_finder<R: tauri::Runtime>(
         return Err("The transcription model has not been downloaded yet.".to_string());
     }
 
+    info!(
+        target_dir = %target_dir.display(),
+        "Revealing managed transcription model in Finder",
+    );
     reveal_path_in_file_manager(&target_dir)
 }
 
@@ -481,6 +523,11 @@ fn delete_managed_model<R: tauri::Runtime>(
             )
         })?;
     }
+
+    info!(
+        target_dir = %target_dir.display(),
+        "Deleted managed transcription model",
+    );
 
     {
         let mut download_state = shared
@@ -522,6 +569,7 @@ fn save_model_settings<R: tauri::Runtime>(
     let settings = StoredModelSettings::from_input(settings)?;
     persist_model_settings(&app, &settings)?;
     refresh_selected_model_preload(&app, &app.state::<AppState>().transcription);
+    info!(source = ?settings.source.unwrap_or_default(), "Saved transcription model settings");
     build_model_settings_state(&app, &settings)
 }
 
@@ -540,6 +588,12 @@ fn save_diarization_settings<R: tauri::Runtime>(
     }
 
     persist_diarization_settings(&app, &stored)?;
+    info!(
+        enabled = stored.enabled,
+        custom_path = !stored.local_path.trim().is_empty(),
+        has_token = !stored.hugging_face_token.trim().is_empty(),
+        "Saved diarization settings",
+    );
     build_diarization_settings_state(&stored)
 }
 
@@ -550,6 +604,12 @@ fn save_general_settings<R: tauri::Runtime>(
 ) -> Result<GeneralSettingsState, String> {
     let settings = StoredGeneralSettings::from_input(settings);
     persist_general_settings(&app, &settings)?;
+    info!(
+        main_language = %settings.main_language,
+        spoken_languages = settings.spoken_languages.len(),
+        timezone = %settings.timezone,
+        "Saved general settings",
+    );
     build_general_settings_state(&settings)
 }
 
@@ -558,6 +618,12 @@ fn run_local_diarization<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     input: RunLocalDiarizationInput,
 ) -> Result<LocalDiarizationResult, String> {
+    info!(
+        audio_path = %input.audio_path,
+        speaker_count = ?input.speaker_count,
+        "Starting local diarization run",
+    );
+
     let settings = load_diarization_settings(&app)?;
     if !settings.enabled {
         return Err("Enable speaker diarization in Settings first.".to_string());
@@ -620,6 +686,14 @@ fn run_local_diarization<R: tauri::Runtime>(
         .map_err(|error| format!("Invalid diarization output: {error}"))?;
     let speaker_count = distinct_speaker_count(&script_output.segments);
 
+    info!(
+        audio_path = %resolved_audio_path.display(),
+        speaker_count,
+        segments = script_output.segments.len(),
+        pipeline_source = %pipeline_source,
+        "Finished local diarization run",
+    );
+
     Ok(LocalDiarizationResult {
         audio_path: resolved_audio_path.display().to_string(),
         pipeline_source,
@@ -655,6 +729,12 @@ fn sync_meeting_markdown<R: tauri::Runtime>(
 
     std::fs::write(&file_path, build_markdown(&export)).map_err(|error| error.to_string())?;
 
+    info!(
+        meeting_id = %export.id,
+        target = %file_path.display(),
+        "Synced meeting markdown export",
+    );
+
     Ok(file_path.display().to_string())
 }
 
@@ -671,6 +751,7 @@ fn reveal_meeting_export_in_finder<R: tauri::Runtime>(
         ));
     }
 
+    info!(target = %target.display(), "Revealing meeting export in Finder");
     reveal_path_in_file_manager(&target)
 }
 
@@ -688,8 +769,14 @@ fn delete_meeting_export<R: tauri::Runtime>(
     }
 
     match std::fs::remove_file(&target) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(()) => {
+            info!(target = %target.display(), "Deleted meeting export");
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            warn!(target = %target.display(), "Meeting export delete requested for missing file");
+            Ok(())
+        }
         Err(error) => Err(format!(
             "Failed to delete the meeting export at {}: {error}",
             target.display()
@@ -703,9 +790,11 @@ async fn start_live_transcription<R: tauri::Runtime>(
     state: State<'_, AppState>,
 ) -> Result<LiveTranscriptionState, String> {
     let transcription = state.inner().transcription.clone();
+    info!("Starting live transcription session");
     tauri::async_runtime::spawn_blocking(move || {
         let settings = load_model_settings(&app)?;
         let model_path = resolve_selected_model_path(&app, &settings)?;
+        info!(model_path = %model_path.display(), "Resolved transcription model path");
         transcription
             .lock()
             .map_err(|_| "Failed to access transcription state.".to_string())?
@@ -737,6 +826,7 @@ fn live_transcription_state<R: tauri::Runtime>(
 fn request_stop_live_transcription(
     state: State<'_, AppState>,
 ) -> Result<LiveTranscriptionState, String> {
+    info!("Requesting live transcription shutdown");
     state
         .inner()
         .transcription
@@ -2230,7 +2320,7 @@ fn sanitize_path_component(input: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(AppState::default())
         .setup(|app| {
             app.set_menu(build_app_menu(app.handle())?)?;
@@ -2265,6 +2355,29 @@ pub fn run() {
             live_transcription_state,
             request_stop_live_transcription
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    let _log_guard = match logging::init_logging(app.handle()) {
+        Ok((guard, log_path)) => {
+            info!(
+                version = env!("CARGO_PKG_VERSION"),
+                log_path = %log_path.display(),
+                "Application logging initialized",
+            );
+            Some(guard)
+        }
+        Err(message) => {
+            eprintln!("Failed to initialize application logging: {message}");
+            None
+        }
+    };
+
+    info!("Application ready");
+
+    app.run(|_, event| {
+        if let RunEvent::Exit = event {
+            info!("Application exiting");
+        }
+    });
 }

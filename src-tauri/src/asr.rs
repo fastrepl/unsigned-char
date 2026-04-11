@@ -18,6 +18,7 @@ use qwen_asr::{
     transcribe::{self, StreamState},
 };
 use serde::Serialize;
+use tracing::{error, info};
 
 const TARGET_SAMPLE_RATE: u32 = 16_000;
 const PUSH_INTERVAL_SAMPLES: usize = TARGET_SAMPLE_RATE as usize / 2;
@@ -67,6 +68,7 @@ struct PreloadedModel {
 impl TranscriptionManager {
     pub fn start(&mut self, model_path: &Path) -> Result<LiveTranscriptionState, String> {
         let _ = self.stop();
+        info!(model_path = %model_path.display(), "Starting transcription manager session");
         let preloaded_ctx = self.take_preloaded(model_path).transpose()?;
         let session = SessionHandle::start(model_path, preloaded_ctx)?;
         let snapshot = session.snapshot();
@@ -98,6 +100,11 @@ impl TranscriptionManager {
         let background_shared = shared.clone();
         let background_model_path = model_path.clone();
 
+        info!(
+            model_path = %background_model_path.display(),
+            "Preloading transcription model context",
+        );
+
         thread::spawn(move || {
             let result = load_model_context(&background_model_path);
             let (state, wake) = &*background_shared;
@@ -119,6 +126,7 @@ impl TranscriptionManager {
             return Ok(LiveTranscriptionState::default());
         };
 
+        info!("Requesting transcription session shutdown");
         session.request_stop()?;
         Ok(session.snapshot())
     }
@@ -137,6 +145,7 @@ impl TranscriptionManager {
             .take()
             .ok_or_else(|| "Failed to access transcription state.".to_string())?;
 
+        info!("Finalizing completed transcription session");
         session.finish()
     }
 
@@ -259,6 +268,7 @@ fn run_session(
     error: SharedError,
     running: Arc<AtomicBool>,
 ) {
+    info!(model_path = %model_path.display(), "Launching transcription session thread");
     let host = cpal::default_host();
     let Some(device) = host.default_input_device() else {
         let _ = startup_tx.send(Err("No microphone input device is available.".to_string()));
@@ -331,6 +341,10 @@ fn run_session(
     }
 
     running.store(true, Ordering::SeqCst);
+    info!(
+        sample_rate,
+        channels, "Live microphone capture started for transcription session",
+    );
     let _ = startup_tx.send(Ok(()));
 
     loop {
@@ -348,6 +362,7 @@ fn run_session(
     let _ = audio_tx.send(AudioMessage::Stop);
     let _ = worker_join.join();
     running.store(false, Ordering::SeqCst);
+    info!("Live microphone capture stopped for transcription session");
 }
 
 fn build_capture_stream(
@@ -527,8 +542,10 @@ fn append_text(transcript: &SharedText, delta: &str) {
 }
 
 fn set_error(error: &SharedError, message: impl Into<String>) {
+    let message = message.into();
+    error!(%message, "Transcription session error");
     if let Ok(mut value) = error.lock() {
-        *value = Some(message.into());
+        *value = Some(message);
     }
 }
 
