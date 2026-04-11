@@ -1,13 +1,23 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --background: #f7f7f4;
   --foreground: #18181b;
   --card: rgba(255, 255, 255, 0.96);
   --card-foreground: #18181b;
+  --popover: rgba(255, 255, 255, 0.98);
+  --popover-foreground: #18181b;
+  --primary: #18181b;
+  --primary-foreground: #ffffff;
   --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
   --muted: #f1f5f9;
   --muted-foreground: #52525b;
+  --accent: #eef2f7;
+  --accent-foreground: #18181b;
+  --destructive: #e11d48;
   --border: rgba(24, 24, 27, 0.08);
   --border-strong: rgba(24, 24, 27, 0.14);
   --input: rgba(255, 255, 255, 0.94);
@@ -27,6 +37,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --destructive-foreground: var(--color-red-700);
 }
 
 * {
@@ -79,4 +90,32 @@ code {
 
 ::selection {
   background-color: rgba(24, 24, 27, 0.12);
+}
+
+.dark {
+  --destructive-foreground: var(--color-red-400);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
 }

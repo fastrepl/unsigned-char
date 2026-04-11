@@ -1,100 +1,12 @@
 import {
-  type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
+import { cn } from "@/lib/utils";
 
-export function cn(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(" ");
-}
-
-type ButtonVariant =
-  | "default"
-  | "secondary"
-  | "outline"
-  | "ghost"
-  | "destructive"
-  | "destructive-outline"
-  | "link";
-type ButtonSize =
-  | "default"
-  | "xs"
-  | "sm"
-  | "lg"
-  | "xl"
-  | "icon-xs"
-  | "icon-sm"
-  | "icon"
-  | "icon-lg"
-  | "icon-xl";
-
-const buttonVariants = {
-  default:
-    "border border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800 disabled:border-zinc-900 disabled:bg-zinc-900 disabled:text-white/70",
-  secondary:
-    "border border-[color:var(--border-strong)] bg-[color:var(--secondary)] text-[color:var(--foreground)] hover:bg-zinc-100 disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400",
-  outline:
-    "border border-[color:var(--border-strong)] bg-[color:var(--card)] text-[color:var(--foreground)] hover:bg-[color:var(--muted)] disabled:border-zinc-200 disabled:bg-zinc-50 disabled:text-zinc-400",
-  ghost:
-    "border border-transparent bg-transparent text-[color:var(--muted-foreground)] hover:bg-[color:var(--muted)] hover:text-[color:var(--foreground)] disabled:text-zinc-400",
-  destructive:
-    "border border-rose-600 bg-rose-600 text-white hover:bg-rose-700 disabled:border-rose-300 disabled:bg-rose-300 disabled:text-white/80",
-  "destructive-outline":
-    "border border-rose-200 bg-[color:var(--card)] text-rose-700 hover:bg-rose-50 disabled:border-rose-100 disabled:text-rose-300",
-  link:
-    "border border-transparent bg-transparent px-0 text-[color:var(--foreground)] underline-offset-4 hover:underline disabled:text-zinc-400",
-} satisfies Record<ButtonVariant, string>;
-
-const buttonSizes = {
-  default: "h-10 px-4 text-sm",
-  xs: "h-7 px-2.5 text-xs",
-  sm: "h-8 px-3 text-sm",
-  lg: "h-11 px-5 text-sm",
-  xl: "h-12 px-6 text-base",
-  "icon-xs": "size-7 p-0",
-  "icon-sm": "size-8 p-0",
-  icon: "size-9 p-0",
-  "icon-lg": "size-10 p-0",
-  "icon-xl": "size-11 p-0",
-} satisfies Record<ButtonSize, string>;
-
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  loading?: boolean;
-};
-
-export function Button({
-  children,
-  className,
-  disabled,
-  loading = false,
-  size = "default",
-  variant = "default",
-  ...props
-}: ButtonProps) {
-  return (
-    <button
-      {...props}
-      disabled={disabled || loading}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[calc(var(--radius)-6px)] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--background)] disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0",
-        buttonVariants[variant],
-        buttonSizes[size],
-        className,
-      )}
-    >
-      {loading ? (
-        <span
-          className="size-3.5 animate-spin rounded-full border-[1.5px] border-current border-r-transparent"
-          aria-hidden="true"
-        />
-      ) : null}
-      {children}
-    </button>
-  );
-}
+export { Button, type ButtonProps } from "./ui/button";
+export { cn };
 
 type BadgeVariant =
   | "default"

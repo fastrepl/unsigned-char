@@ -16,15 +16,20 @@
     "tauri:debug-app": "tauri build --debug && open 'src-tauri/target/debug/bundle/macos/unsigned {char}.app'"
   },
   "dependencies": {
+    "@base-ui/react": "^1.3.0",
     "@tanstack/react-router": "^1.168.10",
     "@tauri-apps/api": "^2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "lucide-react": "^1.7.0",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
