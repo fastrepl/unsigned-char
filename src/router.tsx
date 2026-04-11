@@ -607,7 +607,7 @@ function HomeScreen() {
         node.scrollTop = snapshot.homeScrollTop;
       }
     },
-    [attachHomeScrollFade, snapshot.homeScrollTop],
+    [attachHomeScrollFade],
   );
 
   return (
