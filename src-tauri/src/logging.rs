@@ -33,9 +33,6 @@ pub fn init_logging<R: Runtime>(app: &AppHandle<R>) -> Result<(WorkerGuard, Path
             )
         })?;
 
-    tracing_log::LogTracer::init()
-        .map_err(|error| format!("Failed to connect log crate events to tracing: {error}"))?;
-
     let (writer, guard) = tracing_appender::non_blocking(file);
     tracing_subscriber::fmt()
         .with_ansi(false)

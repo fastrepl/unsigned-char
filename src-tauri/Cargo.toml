@@ -26,7 +26,6 @@ qwen-asr = "0.5.0"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 tracing = "0.1"
 tracing-appender = "0.2"
-tracing-log = "0.2"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
 [target.'cfg(target_os = "macos")'.build-dependencies]

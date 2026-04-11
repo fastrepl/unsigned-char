@@ -4932,7 +4932,6 @@ dependencies = [
  "tauri-build",
  "tracing",
  "tracing-appender",
- "tracing-log",
  "tracing-subscriber",
 ]
 
