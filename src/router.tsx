@@ -943,12 +943,12 @@ function MeetingScreen() {
         </div>
       </div>
 
-      <div className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4 pb-4 pr-5">
-        <div className="flex min-h-full flex-col gap-4">
+      <div className="-mx-4 min-h-0 flex-1 px-4 pb-4 pr-5">
+        <div className="flex h-full min-h-0 flex-col gap-4">
           <Card className="min-h-[260px] flex-1 overflow-hidden">
-            <div className="relative h-full">
+            <div className="relative flex h-full min-h-0 flex-col">
               <section
-                className="flex h-full flex-col overflow-y-auto p-4"
+                className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
                 ref={attachTranscriptRef}
                 onScroll={handleTranscriptScroll}
               >
