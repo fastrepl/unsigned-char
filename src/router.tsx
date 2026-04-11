@@ -122,7 +122,7 @@ const insetPanelClass =
   "rounded-[calc(var(--radius)-4px)] border border-[color:var(--border)] bg-[color:var(--secondary)] px-4 py-3";
 const emptyStateClass =
   "rounded-[var(--radius)] border border-dashed border-[color:var(--border-strong)] bg-[color:var(--secondary)] px-6 py-8 text-center";
-const windowShellHeightClass = "h-[calc(100vh-3.75rem)]";
+const windowShellHeightClass = "h-[calc(100vh-2.5rem)]";
 const appWindow = getCurrentWindow();
 
 type SearchableOption = {
@@ -484,7 +484,7 @@ function RootLayout() {
   return (
     <div className="isolate min-h-screen w-full text-zinc-900">
       <WindowDragRegion className="h-10 w-full" />
-      <div className="px-4 pb-5">
+      <div className="px-4">
         <Outlet />
       </div>
     </div>
