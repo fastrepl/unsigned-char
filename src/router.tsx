@@ -850,7 +850,7 @@ function MeetingScreen() {
   const isStoppingMeeting = snapshot.transcriptionStopping && meeting.status === "live";
 
   return (
-    <section className={cn("mx-auto flex max-w-[760px] flex-col gap-5 overflow-hidden", windowShellHeightClass)}>
+    <section className={cn("mx-auto flex max-w-[760px] flex-col gap-5", windowShellHeightClass)}>
       <WindowDragRegion className="flex flex-col gap-5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
           <div data-window-drag="false">
