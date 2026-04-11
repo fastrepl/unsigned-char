@@ -54,8 +54,6 @@ import {
   requiresAppSetup,
   sortedMeetings,
   type Meeting,
-  type PermissionKind,
-  type PermissionStatus,
   useAppState,
 } from "./store";
 import {
@@ -113,28 +111,6 @@ function StatusBadge({
       {children}
     </Badge>
   );
-}
-
-function permissionStatusLabel(status: PermissionStatus) {
-  switch (status) {
-    case "authorized":
-      return "allowed";
-    case "denied":
-      return "blocked";
-    default:
-      return "needs access";
-  }
-}
-
-function permissionStatusVariant(status: PermissionStatus) {
-  switch (status) {
-    case "authorized":
-      return "success";
-    case "denied":
-      return "destructive";
-    default:
-      return "secondary";
-  }
 }
 
 function isMeetingDeleteDisabled(
@@ -856,26 +832,6 @@ function MeetingScreen() {
   }
 
   const transcriptLines = getMeetingTranscriptLines(meeting);
-  const transcriptPermissionRows = (
-    [
-      {
-        kind: "microphone",
-        label: "Microphone",
-        detail: "Hear your side of the meeting.",
-      },
-      {
-        kind: "systemAudio",
-        label: "System audio",
-        detail: "Hear everyone else in the meeting.",
-      },
-    ] as const satisfies ReadonlyArray<{ kind: PermissionKind; label: string; detail: string }>
-  ).map((permission) => ({
-    ...permission,
-    status: snapshot.onboarding?.permissions[permission.kind] ?? "neverRequested",
-  }));
-  const showTranscriptPermissionPrompt =
-    transcriptLines.length === 0 &&
-    transcriptPermissionRows.some((permission) => permission.status !== "authorized");
   const deleteDisabled = isMeetingDeleteDisabled(
     meeting,
     snapshot.transcriptionBusy,
@@ -996,52 +952,13 @@ function MeetingScreen() {
                 ref={attachTranscriptRef}
                 onScroll={handleTranscriptScroll}
               >
-                {showTranscriptPermissionPrompt ? (
-                  <div className={cn(emptyStateClass, "text-left")}>
-                    <p className="text-center text-lg font-semibold tracking-[-0.02em] text-zinc-950">
-                      Allow audio access
-                    </p>
-                    <p className="mt-2 text-center text-sm leading-6 text-zinc-600">
-                      unsigned char needs microphone and system audio permissions before the live transcript
-                      can hear both sides of the meeting.
-                    </p>
-
-                    <div className="mt-6 space-y-3">
-                      {transcriptPermissionRows.map((permission) => (
-                        <div
-                          key={permission.kind}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-[calc(var(--radius)-6px)] border border-[color:var(--border)] bg-[color:var(--card)] px-4 py-3 text-left"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-zinc-950">{permission.label}</p>
-                            <p className="mt-1 text-sm leading-6 text-zinc-600">{permission.detail}</p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={permissionStatusVariant(permission.status)}>
-                              {permissionStatusLabel(permission.status)}
-                            </Badge>
-                            {permission.status === "authorized" ? null : (
-                              <Button
-                                size="sm"
-                                variant={permission.status === "denied" ? "outline" : "secondary"}
-                                disabled={snapshot.transcriptionBusy}
-                                onClick={() => {
-                                  void appStore.requestMeetingPermission(permission.kind);
-                                }}
-                              >
-                                {permission.status === "denied" ? "Open settings" : "Allow access"}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : transcriptLines.length === 0 ? (
+                {transcriptLines.length === 0 ? (
                   <div className={emptyStateClass}>
                     <p className="text-lg font-semibold tracking-[-0.02em] text-zinc-950">Live transcript</p>
                     <p className="mt-2 text-sm leading-6 text-zinc-600">
-                      Start speaking and your microphone transcript will appear here.
+                      {meeting.status === "live"
+                        ? "Start speaking and your transcript will appear here."
+                        : "Resume listening and the live transcript will appear here."}
                     </p>
                   </div>
                 ) : (

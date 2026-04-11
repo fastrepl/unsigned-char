@@ -1119,23 +1119,6 @@ async function prepareMeetingPermissions() {
   }
 }
 
-async function requestMeetingPermission(permission: PermissionKind) {
-  patch({
-    permissionNote: "",
-    meetingNote: "",
-  });
-
-  try {
-    await requestPermissionForMeeting(permission);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    patch({
-      permissionNote: message,
-      meetingNote: message,
-    });
-  }
-}
-
 async function startLiveTranscriptionSession(meetingId: string | null) {
   const snapshot = await invoke<LiveTranscriptionState>("start_live_transcription");
   if (snapshot.error) {
@@ -1720,7 +1703,6 @@ export const appStore = {
   start,
   startMeeting,
   toggleMeetingStatus,
-  requestMeetingPermission,
   runMeetingDiarization,
   revealMeetingExportInFinder,
   deleteMeeting,
