@@ -518,7 +518,7 @@ fn download_managed_model<R: tauri::Runtime>(
         "Starting speech-swift transcription model download",
     );
 
-    start_speech_model_download(speech_model_repo(selected_model_id))?;
+    start_speech_model_download(selected_model_id.as_str())?;
 
     snapshot_managed_model_download_state(&app, &shared)
 }
@@ -557,7 +557,7 @@ fn delete_managed_model<R: tauri::Runtime>(
         return Err("The transcription model is still downloading.".to_string());
     }
 
-    reset_speech_model(speech_model_repo(selected_model_id))?;
+    reset_speech_model(selected_model_id.as_str())?;
 
     if target_dir.exists() {
         std::fs::remove_dir_all(&target_dir).map_err(|error| {
@@ -1642,7 +1642,7 @@ fn snapshot_managed_model_download_state<R: tauri::Runtime>(
     let model_settings = effective_model_settings(&load_model_settings(app)?);
     let selected_model_id = model_settings.selected_model_id();
     let local_path = managed_model_path_for(app, selected_model_id)?;
-    let speech_state = speech_model_download_state(speech_model_repo(selected_model_id))?;
+    let speech_state = speech_model_download_state(selected_model_id.as_str())?;
     let mut download_state = shared
         .lock()
         .map_err(|_| "Failed to access model download state.".to_string())?;
