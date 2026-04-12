@@ -5,7 +5,13 @@ import { useSyncExternalStore } from "react";
 export type PermissionKind = "microphone" | "systemAudio";
 export type PermissionStatus = "neverRequested" | "authorized" | "denied";
 export type MeetingStatus = "live" | "done";
-export type ModelSource = "bundled" | "huggingFace";
+export type ProcessingMode = "realtime" | "batch";
+export type SpeechModelId =
+  | "parakeetStreaming"
+  | "parakeetBatch"
+  | "omnilingual"
+  | "qwen3Small"
+  | "qwen3Large";
 
 export type OnboardingState = {
   productName: string;
@@ -36,20 +42,40 @@ export type Meeting = {
 };
 
 export type ModelSettings = {
-  source: ModelSource;
-  bundledLabel: string;
-  bundledRelativePath: string;
-  bundledResolvedPath: string;
-  bundledReady: boolean;
-  bundledStatus: string;
-  huggingFaceRepo: string;
-  huggingFaceRevision: string;
-  huggingFaceLocalPath: string;
-  huggingFaceResolvedPath: string | null;
-  huggingFaceReady: boolean;
-  huggingFaceStatus: string;
+  processingMode: ProcessingMode;
+  batchModelId: SpeechModelId;
+  selectedModelId: SpeechModelId;
+  selectedModelLabel: string;
+  selectedModelRepo: string;
+  selectedModelDetail: string;
+  selectedModelSizeLabel: string;
+  selectedModelLanguagesLabel: string;
+  selectedModelLocalPath: string;
+  selectedModelStatus: string;
+  availableModels: SpeechModelOption[];
+  recommendedModelId: SpeechModelId;
+  recommendationReason: string;
+  deviceProfile: DeviceProfile;
   selectedReady: boolean;
   selectedReference: string | null;
+};
+
+export type SpeechModelOption = {
+  id: SpeechModelId;
+  label: string;
+  detail: string;
+  processingMode: ProcessingMode;
+  repo: string;
+  localPath: string;
+  ready: boolean;
+  languagesLabel: string;
+  sizeLabel: string;
+  recommended: boolean;
+};
+
+export type DeviceProfile = {
+  chipLabel: string;
+  memoryGb: number;
 };
 
 export type ManagedModelDownloadStatus = "idle" | "downloading" | "ready" | "error";
@@ -140,6 +166,8 @@ type LiveTranscriptionState = {
   running: boolean;
   text: string;
   error: string | null;
+  audioPath: string;
+  mode: ProcessingMode | null;
 };
 
 type GeneratedTranscriptSummary = {
@@ -170,6 +198,7 @@ type AppState = {
   transcriptionStopping: boolean;
   transcriptionRunning: boolean;
   liveTranscriptText: string;
+  liveTranscriptionMode: ProcessingMode | null;
   recordingMeetingId: string | null;
   diarizationRunBusy: boolean;
   summaryMeetingId: string | null;
@@ -264,6 +293,19 @@ export const LANGUAGE_OPTIONS = COMMON_LANGUAGE_CODES.map((value) => ({
   label: formatLanguageLabel(value),
 }));
 
+export const PROCESSING_MODE_OPTIONS = [
+  {
+    value: "realtime",
+    label: "Realtime",
+    detail: "Live",
+  },
+  {
+    value: "batch",
+    label: "Batch",
+    detail: "Post-meeting",
+  },
+] as const;
+
 let state: AppState = {
   initialized: false,
   onboarding: null,
@@ -286,6 +328,7 @@ let state: AppState = {
   transcriptionStopping: false,
   transcriptionRunning: false,
   liveTranscriptText: "",
+  liveTranscriptionMode: null,
   recordingMeetingId: null,
   diarizationRunBusy: false,
   summaryMeetingId: null,
@@ -717,7 +760,12 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
   const download = snapshot.modelDownload;
   const isDownloading = download?.status === "downloading";
   const isError = download?.status === "error";
-  const localPath = download?.localPath || snapshot.modelSettings.huggingFaceLocalPath;
+  const selectedModelLabel = snapshot.modelSettings.selectedModelLabel;
+  const localPath = download?.localPath || snapshot.modelSettings.selectedModelLocalPath;
+  const modeCopy =
+    snapshot.modelSettings.processingMode === "batch"
+      ? "post-meeting batch transcription"
+      : "live transcription";
 
   if (isDownloading && download) {
     const progress = download.currentFile
@@ -729,7 +777,7 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
     return {
       kicker: "Downloading model",
       title: "Transcription model setup in progress",
-      copy: "unsigned {char} is downloading the speech-swift Parakeet streaming model and storing it locally on this Mac.",
+      copy: `unsigned {char} is downloading ${selectedModelLabel} and storing it locally on this Mac.`,
       detail: progress,
       localPath,
       actionLabel: null,
@@ -750,9 +798,8 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
   return {
     kicker: "Setup required",
     title: "Download transcription model",
-    copy:
-      "Download the speech-swift Parakeet streaming model once to run transcription locally. The model is cached on this device.",
-    detail: "The first download includes the compiled CoreML model files.",
+    copy: `Download ${selectedModelLabel} once to run ${modeCopy} locally. The model is cached on this device.`,
+    detail: snapshot.modelSettings.selectedModelDetail,
     localPath,
     actionLabel: "Download model",
   };
@@ -818,16 +865,16 @@ function updateMeeting(id: string, updater: (meeting: Meeting) => Meeting) {
   emit();
 }
 
-function createMeeting() {
+function createMeeting(meetingId = crypto.randomUUID(), audioPath = "") {
   const createdAt = new Date().toISOString();
   const meeting: Meeting = {
-    id: crypto.randomUUID(),
+    id: meetingId,
     title: buildMeetingTitle(createdAt),
     createdAt,
     updatedAt: createdAt,
     status: "live",
     transcript: [],
-    audioPath: "",
+    audioPath: audioPath.trim(),
     requestedSpeakerCount: null,
     diarizationSegments: [],
     diarizationSpeakerCount: 0,
@@ -1018,10 +1065,6 @@ function syncLiveTranscriptionPolling() {
 }
 
 function syncModelDownloadPolling() {
-  if (isSettingsWindow) {
-    return;
-  }
-
   const shouldPoll = state.modelDownload?.status === "downloading";
   if (!shouldPoll) {
     if (modelDownloadPollId !== null) {
@@ -1139,11 +1182,7 @@ async function ensureModelReady() {
     throw new Error(state.modelDownload.error);
   }
 
-  if (state.modelSettings.source === "bundled") {
-    throw new Error(state.modelSettings.bundledStatus);
-  }
-
-  throw new Error(state.modelSettings.huggingFaceStatus);
+  throw new Error(state.modelSettings.selectedModelStatus);
 }
 
 async function ensureDiarizationReady() {
@@ -1209,8 +1248,10 @@ async function prepareMeetingPermissions() {
   }
 }
 
-async function startLiveTranscriptionSession(meetingId: string | null) {
-  const snapshot = await invoke<LiveTranscriptionState>("start_live_transcription");
+async function startLiveTranscriptionSession(meetingId: string) {
+  const snapshot = await invoke<LiveTranscriptionState>("start_live_transcription", {
+    meetingId,
+  });
   if (snapshot.error) {
     throw new Error(snapshot.error);
   }
@@ -1225,18 +1266,22 @@ async function startLiveTranscriptionSession(meetingId: string | null) {
     transcriptionRunning: snapshot.running,
     transcriptionStopping: false,
     liveTranscriptText: snapshot.text.trim(),
+    liveTranscriptionMode: snapshot.mode,
   };
   emit();
   syncLiveTranscriptionPolling();
+  return snapshot;
 }
 
 function finalizeLiveTranscript(markDone = false) {
   const meeting = getRecordingMeeting();
   const text = state.liveTranscriptText.trim();
+  const mode = state.liveTranscriptionMode;
 
   if (!meeting) {
     patch({
       liveTranscriptText: "",
+      liveTranscriptionMode: null,
       recordingMeetingId: null,
       transcriptionStopping: false,
     });
@@ -1245,9 +1290,13 @@ function finalizeLiveTranscript(markDone = false) {
 
   updateMeeting(meeting.id, (current) => {
     const transcript =
-      text && current.transcript[current.transcript.length - 1] !== text
-        ? [...current.transcript, text]
-        : current.transcript;
+      mode === "batch"
+        ? text
+          ? [text]
+          : current.transcript
+        : text && current.transcript[current.transcript.length - 1] !== text
+          ? [...current.transcript, text]
+          : current.transcript;
     const transcriptChanged = transcript !== current.transcript;
 
     return {
@@ -1264,6 +1313,7 @@ function finalizeLiveTranscript(markDone = false) {
 
   patch({
     liveTranscriptText: "",
+    liveTranscriptionMode: null,
     recordingMeetingId: null,
     transcriptionStopping: false,
   });
@@ -1284,6 +1334,7 @@ async function refreshLiveTranscription(silent = false) {
       transcriptionBusy: wasStopping ? snapshot.running : state.transcriptionBusy,
       transcriptionStopping: wasStopping && snapshot.running,
       liveTranscriptText: snapshot.text.trim(),
+      liveTranscriptionMode: snapshot.mode,
       meetingNote: snapshot.error || state.meetingNote,
     };
     emit();
@@ -1302,6 +1353,7 @@ async function refreshLiveTranscription(silent = false) {
       transcriptionBusy: false,
       transcriptionRunning: false,
       transcriptionStopping: false,
+      liveTranscriptionMode: null,
     });
   } finally {
     syncLiveTranscriptionPolling();
@@ -1325,6 +1377,7 @@ async function requestStopLiveTranscriptionSession() {
     transcriptionRunning: snapshot.running,
     transcriptionStopping: stopPending,
     liveTranscriptText: snapshot.text.trim(),
+    liveTranscriptionMode: snapshot.mode,
     meetingNote: snapshot.error || state.meetingNote,
   };
   emit();
@@ -1349,6 +1402,17 @@ async function deleteMeetingExportQuietly(path: string | null) {
   } catch {}
 }
 
+async function deleteMeetingAudioQuietly(path: string | null) {
+  const audioPath = path?.trim() || null;
+  if (!audioPath) {
+    return;
+  }
+
+  try {
+    await invoke("delete_meeting_audio", { path: audioPath });
+  } catch {}
+}
+
 async function reconcilePersistedLiveMeetings() {
   const liveMeetings = sortedMeetings(
     state.meetings.filter((meeting) => meeting.status === "live"),
@@ -1363,6 +1427,7 @@ async function reconcilePersistedLiveMeetings() {
 
   const activeMeetingId = snapshot.running ? liveMeetings[0]?.id ?? null : null;
   const nextLiveTranscriptText = snapshot.text.trim();
+  const nextLiveTranscriptionMode = snapshot.mode;
   const nextMeetingNote = snapshot.error || state.meetingNote;
   const exportPathsToDelete: string[] = [];
   const finishedAt = new Date().toISOString();
@@ -1402,6 +1467,7 @@ async function reconcilePersistedLiveMeetings() {
     state.transcriptionRunning !== snapshot.running ||
     state.transcriptionStopping ||
     state.liveTranscriptText !== nextLiveTranscriptText ||
+    state.liveTranscriptionMode !== nextLiveTranscriptionMode ||
     state.meetingNote !== nextMeetingNote;
 
   if (stateChanged) {
@@ -1412,6 +1478,7 @@ async function reconcilePersistedLiveMeetings() {
       transcriptionRunning: snapshot.running,
       transcriptionStopping: false,
       liveTranscriptText: nextLiveTranscriptText,
+      liveTranscriptionMode: nextLiveTranscriptionMode,
       meetingNote: nextMeetingNote,
     };
     if (meetingsChanged) {
@@ -1463,8 +1530,9 @@ async function startMeeting() {
     await prepareMeetingPermissions();
     await stopActiveRecordingIfNeeded();
     patch({ transcriptionBusy: true });
-    await startLiveTranscriptionSession(null);
-    const meeting = createMeeting();
+    const meetingId = crypto.randomUUID();
+    const snapshot = await startLiveTranscriptionSession(meetingId);
+    const meeting = createMeeting(meetingId, snapshot.audioPath);
     return meeting;
   } catch (error) {
     patch({
@@ -1512,9 +1580,10 @@ async function toggleMeetingStatus(meetingId: string) {
     await ensureModelReady();
     await prepareMeetingPermissions();
     await stopActiveRecordingIfNeeded(meeting.id);
-    await startLiveTranscriptionSession(meeting.id);
+    const snapshot = await startLiveTranscriptionSession(meeting.id);
     updateMeeting(meeting.id, (current) => ({
       ...current,
+      audioPath: snapshot.audioPath.trim() || current.audioPath,
       status: "live",
       updatedAt: new Date().toISOString(),
     }));
@@ -1625,6 +1694,7 @@ async function deleteMeeting(meetingId: string) {
   }
 
   const exportPath = meeting.exportPath?.trim() || null;
+  const audioPath = meeting.audioPath?.trim() || null;
   const deletedActiveMeeting = currentMeetingIdFromHash() === meetingId;
 
   clearMeetingMarkdownSync(meetingId);
@@ -1642,18 +1712,21 @@ async function deleteMeeting(meetingId: string) {
     setHashRoute("/");
   }
 
-  if (!exportPath) {
+  if (!exportPath && !audioPath) {
     return;
   }
 
   try {
-    await invoke("delete_meeting_export", { path: exportPath });
+    await Promise.all([
+      deleteMeetingExportQuietly(exportPath),
+      deleteMeetingAudioQuietly(audioPath),
+    ]);
   } catch (error) {
     patch({
       permissionNote:
         error instanceof Error
-          ? `Deleted the meeting, but couldn't remove its markdown file: ${error.message}`
-          : `Deleted the meeting, but couldn't remove its markdown file: ${String(error)}`,
+          ? `Deleted the meeting, but couldn't remove one of its local files: ${error.message}`
+          : `Deleted the meeting, but couldn't remove one of its local files: ${String(error)}`,
     });
   }
 }
@@ -1688,12 +1761,45 @@ async function saveGeneralSettings() {
       generalDraft: syncGeneralDraft(generalSettings),
       generalNote: "",
     });
+    await refreshModelSettings(true);
   } catch (error) {
     patch({
       generalNote: `Settings save failed: ${String(error)}`,
     });
   } finally {
     patch({ generalBusy: false });
+  }
+}
+
+async function saveModelSettings(
+  next: Partial<Pick<ModelSettings, "processingMode" | "batchModelId">> = {},
+) {
+  if (state.modelBusy || !state.modelSettings) {
+    return;
+  }
+
+  patch({
+    modelBusy: true,
+    permissionNote: "",
+  });
+
+  try {
+    const modelSettings = await invoke<ModelSettings>("save_model_settings", {
+      settings: {
+        processingMode: next.processingMode ?? state.modelSettings.processingMode,
+        batchModelId: next.batchModelId ?? state.modelSettings.batchModelId,
+      },
+    });
+
+    patch({ modelSettings });
+    await Promise.all([refreshManagedModelDownloadState(true), refreshPermissions(true)]);
+  } catch (error) {
+    patch({
+      permissionNote:
+        error instanceof Error ? error.message : `Model settings save failed: ${String(error)}`,
+    });
+  } finally {
+    patch({ modelBusy: false });
   }
 }
 
@@ -1865,6 +1971,22 @@ function updateMeetingRequestedSpeakerCount(meetingId: string, value: string) {
 
 function setHomeScrollTop(homeScrollTop: number) {
   patch({ homeScrollTop });
+}
+
+function setProcessingMode(processingMode: ProcessingMode) {
+  if (!state.modelSettings || state.modelSettings.processingMode === processingMode) {
+    return;
+  }
+
+  void saveModelSettings({ processingMode });
+}
+
+function setBatchModel(batchModelId: SpeechModelId) {
+  if (!state.modelSettings || state.modelSettings.batchModelId === batchModelId) {
+    return;
+  }
+
+  void saveModelSettings({ batchModelId });
 }
 
 function setMainLanguage(mainLanguage: string) {
@@ -2089,6 +2211,8 @@ export const appStore = {
   updateMeetingAudioPath,
   updateMeetingRequestedSpeakerCount,
   setHomeScrollTop,
+  setProcessingMode,
+  setBatchModel,
   setMainLanguage,
   setTimezone,
   addSpokenLanguage,

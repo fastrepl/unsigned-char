@@ -44,6 +44,7 @@ import {
 import { useScrollFade } from "./hooks/useScrollFade";
 import {
   LANGUAGE_OPTIONS,
+  PROCESSING_MODE_OPTIONS,
   appStore,
   currentSetupBannerContent,
   formatDateTime,
@@ -870,6 +871,10 @@ function MeetingScreen() {
   const isStoppingMeeting = snapshot.transcriptionStopping && meeting.status === "live";
   const summaryReady = Boolean(snapshot.summarySettings?.ready);
   const isGeneratingSummary = snapshot.summaryMeetingId === meeting.id;
+  const emptyTranscriptCopy =
+    meeting.status === "live" && snapshot.modelSettings?.processingMode === "batch"
+      ? "Transcript will be generated after you stop the meeting."
+      : "Transcript will appear here.";
 
   return (
     <section className={cn("mx-auto flex max-w-[760px] flex-col gap-5", windowShellHeightClass)}>
@@ -1054,7 +1059,7 @@ function MeetingScreen() {
 
           {transcriptLines.length === 0 ? (
             <Card className="flex min-h-[260px] flex-1 items-center justify-center border-dotted bg-[color:var(--secondary)] px-6 text-center">
-              <p className="text-sm leading-6 text-zinc-600">Transcript will appear here.</p>
+              <p className="text-sm leading-6 text-zinc-600">{emptyTranscriptCopy}</p>
             </Card>
           ) : (
             <Card className="min-h-[260px] flex-1 overflow-hidden">
@@ -1109,7 +1114,7 @@ function MeetingScreen() {
 function SettingsScreen() {
   const snapshot = useAppState();
 
-  if (!snapshot.generalSettings || !snapshot.summarySettings) {
+  if (!snapshot.generalSettings || !snapshot.summarySettings || !snapshot.modelSettings) {
     return (
       <section className={cn("mx-auto flex max-w-[760px] items-center", windowShellHeightClass)}>
         <Card className="w-full">
@@ -1122,8 +1127,9 @@ function SettingsScreen() {
   }
 
   const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const modelSettings = snapshot.modelSettings;
   const timezoneOptions = getTimezoneOptions(snapshot);
-  const modelReady = Boolean(snapshot.modelSettings?.selectedReady);
+  const modelReady = Boolean(modelSettings.selectedReady);
   const downloadStatus = snapshot.modelDownload?.status ?? "idle";
   const modelStatusLabel =
     downloadStatus === "downloading"
@@ -1133,6 +1139,19 @@ function SettingsScreen() {
         : "needs setup";
   const modelStatusTone = downloadStatus === "downloading" ? "missing" : modelReady ? "ready" : "missing";
   const setupBanner = currentSetupBannerContent(snapshot);
+  const selectedModel = modelSettings.availableModels.find(
+    (option) => option.id === modelSettings.selectedModelId,
+  );
+  const batchModelOptions = modelSettings.availableModels
+    .filter((option) => option.processingMode === "batch")
+    .map((option) => ({
+      value: option.id,
+      label: option.label,
+      detail: option.sizeLabel,
+    }));
+  const recommendedModel = modelSettings.availableModels.find(
+    (option) => option.id === modelSettings.recommendedModelId,
+  );
   const selectedSummaryProvider = getSummaryProviderDefinition(snapshot.summaryDraft.provider);
   const summaryStatusLabel = !snapshot.summarySettings.provider
     ? "off"
@@ -1169,31 +1188,111 @@ function SettingsScreen() {
           <div className="space-y-1">
             <CardTitle>Transcription model</CardTitle>
             <CardDescription>
-              Download the speech-swift Parakeet streaming model once and keep it local to this Mac.
+              Switch between live captions and post-meeting batch transcription, then choose the
+              local model that best fits this Mac.
             </CardDescription>
           </div>
           <CardAction>
             <StatusBadge tone={modelStatusTone}>{modelStatusLabel}</StatusBadge>
           </CardAction>
         </CardHeader>
-        <CardPanel className="pt-0">
+        <CardPanel className="grid gap-6 pt-0">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+            <div>
+              <p className="text-sm font-semibold text-zinc-950">Processing mode</p>
+              <p className="mt-1 text-sm leading-6 text-zinc-600">
+                Realtime shows live captions while you record. Batch waits until the meeting ends,
+                then transcribes the saved audio.
+              </p>
+            </div>
+            <SearchableSelect
+              ariaLabel="Processing mode"
+              value={snapshot.modelSettings.processingMode}
+              onChange={(nextValue) => {
+                appStore.setProcessingMode(nextValue as "realtime" | "batch");
+              }}
+              options={PROCESSING_MODE_OPTIONS}
+              placeholder="Select mode"
+              searchPlaceholder="Search mode..."
+              disabled={snapshot.modelBusy || downloadStatus === "downloading"}
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+            <div>
+              <p className="text-sm font-semibold text-zinc-950">Batch model</p>
+              <p className="mt-1 text-sm leading-6 text-zinc-600">
+                Stored even while realtime mode is active, so you can pre-pick the model that runs
+                after a meeting ends.
+              </p>
+            </div>
+            <SearchableSelect
+              ariaLabel="Batch model"
+              value={snapshot.modelSettings.batchModelId}
+              onChange={(nextValue) => {
+                appStore.setBatchModel(nextValue as typeof snapshot.modelSettings.batchModelId);
+              }}
+              options={batchModelOptions}
+              placeholder="Select batch model"
+              searchPlaceholder="Search model..."
+              disabled={snapshot.modelBusy || downloadStatus === "downloading"}
+            />
+          </div>
+
+          <div className={cn(insetPanelClass, "space-y-3")}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                  Active model
+                </p>
+                <p className="mt-1 text-sm font-semibold text-zinc-950">
+                  {snapshot.modelSettings.selectedModelLabel}
+                </p>
+              </div>
+              <Badge variant="secondary">
+                {snapshot.modelSettings.deviceProfile.chipLabel} · {snapshot.modelSettings.deviceProfile.memoryGb} GB
+              </Badge>
+            </div>
+
+            <p className="text-sm leading-6 text-zinc-600">
+              {modelReady
+                ? snapshot.modelSettings.selectedModelStatus
+                : setupBanner?.copy ?? snapshot.modelSettings.selectedModelStatus}
+            </p>
+
+            <p className="text-sm text-zinc-500">
+              {selectedModel?.detail} · {snapshot.modelSettings.selectedModelLanguagesLabel} ·{" "}
+              {snapshot.modelSettings.selectedModelSizeLabel}
+            </p>
+
+            <div className="rounded-[calc(var(--radius)-6px)] border border-[color:var(--border)] bg-white/70 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                Recommendation
+              </p>
+              <p className="mt-1 text-sm font-semibold text-zinc-950">
+                {recommendedModel?.label ?? snapshot.modelSettings.selectedModelLabel}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-zinc-600">
+                {snapshot.modelSettings.recommendationReason}
+              </p>
+            </div>
+
+            {setupBanner?.detail ? (
+              <p className="text-sm text-zinc-500">{setupBanner.detail}</p>
+            ) : null}
+          </div>
+
           <p className="text-sm leading-6 text-zinc-600">
-            {modelReady
-              ? snapshot.modelSettings?.huggingFaceStatus ?? "Local transcription model is ready."
-              : setupBanner?.copy ?? "Download the local transcription model to continue."}
+            Model id: <code>{snapshot.modelSettings.selectedModelRepo}</code>
           </p>
 
-          {setupBanner?.detail ? (
-            <p className="mt-3 text-sm text-zinc-500">{setupBanner.detail}</p>
-          ) : null}
-
-          {(snapshot.modelDownload?.localPath || snapshot.modelSettings?.huggingFaceLocalPath) ? (
-            <div className={cn("mt-4", insetPanelClass)}>
+          {(snapshot.modelDownload?.localPath || snapshot.modelSettings.selectedModelLocalPath) ? (
+            <div className={cn(insetPanelClass)}>
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
                 Storage
               </p>
               <code className="mt-1 block break-all text-xs text-zinc-700">
-                {snapshot.modelDownload?.localPath || snapshot.modelSettings?.huggingFaceLocalPath}
+                {snapshot.modelDownload?.localPath || snapshot.modelSettings.selectedModelLocalPath}
               </code>
             </div>
           ) : null}

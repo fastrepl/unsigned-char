@@ -4,6 +4,8 @@ fn main() {
         swift_rs::SwiftLinker::new("15.0")
             .with_package("permissions-swift", "./swift-permissions/")
             .link();
+
+        println!("cargo:rustc-link-lib=c++");
     }
 
     println!("cargo:rerun-if-changed=resources/models");

@@ -31,6 +31,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "macOS": {
+      "minimumSystemVersion": "15.0"
+    },
     "externalBin": [
       "binaries/uchar"
     ],

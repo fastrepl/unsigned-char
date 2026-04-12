@@ -1,6 +1,7 @@
 mod asr;
 mod logging;
 mod permissions;
+mod speech_models;
 
 use std::{
     env,
@@ -16,6 +17,11 @@ use asr::{
 };
 use permissions::{PermissionKind, PermissionSnapshot};
 use serde::{Deserialize, Serialize};
+use speech_models::{
+    detect_device_profile, meeting_audio_file_name, model_path_is_ready, normalize_batch_model,
+    recommend_model, selected_model, speech_model_repo, speech_model_spec, DeviceProfileState,
+    SpeechModelId, TranscriptionMode,
+};
 use tauri::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu},
     Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder,
@@ -24,11 +30,6 @@ use tracing::{error, info, warn};
 
 const APP_NAME: &str = "unsigned char";
 const APP_DISPLAY_NAME: &str = "unsigned {char}";
-const BUNDLED_MODEL_NAME: &str = "Bundled speech-swift";
-const BUNDLED_MODEL_RELATIVE_PATH: &str = "models";
-const DEFAULT_MODEL_NAME: &str = "speech-swift Parakeet Streaming ASR";
-const DEFAULT_HUGGING_FACE_MODEL_REPO: &str = "aufklarer/Parakeet-EOU-120M-CoreML-INT8";
-const DEFAULT_HUGGING_FACE_MODEL_REVISION: &str = "main";
 const PYANNOTE_RUNNER_RELATIVE_PATH: &str = "scripts/pyannote_diarize.py";
 const SETTINGS_CONFIG_FILE: &str = "settings.json";
 const LEGACY_GENERAL_SETTINGS_FILE: &str = "general-settings.json";
@@ -96,21 +97,11 @@ struct RunLocalDiarizationInput {
     speaker_count: Option<usize>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum ModelSource {
-    #[default]
-    Bundled,
-    HuggingFace,
-}
-
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SaveModelSettingsInput {
-    source: ModelSource,
-    hugging_face_repo: String,
-    hugging_face_revision: String,
-    hugging_face_local_path: String,
+    processing_mode: TranscriptionMode,
+    batch_model_id: SpeechModelId,
 }
 
 #[derive(Clone, Deserialize)]
@@ -155,13 +146,9 @@ struct GenerateTranscriptSummaryInput {
 #[serde(rename_all = "camelCase")]
 struct StoredModelSettings {
     #[serde(default)]
-    source: Option<ModelSource>,
+    processing_mode: Option<TranscriptionMode>,
     #[serde(default)]
-    hugging_face_repo: String,
-    #[serde(default)]
-    hugging_face_revision: String,
-    #[serde(default)]
-    hugging_face_local_path: String,
+    batch_model_id: Option<SpeechModelId>,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -219,21 +206,37 @@ struct StoredAppSettings {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ModelSettingsState {
-    source: ModelSource,
-    bundled_label: &'static str,
-    bundled_relative_path: &'static str,
-    bundled_resolved_path: String,
-    bundled_ready: bool,
-    bundled_status: String,
-    hugging_face_repo: String,
-    hugging_face_revision: String,
-    hugging_face_local_path: String,
-    hugging_face_resolved_path: Option<String>,
-    hugging_face_ready: bool,
-    hugging_face_status: String,
-    uses_managed_model: bool,
+    processing_mode: TranscriptionMode,
+    batch_model_id: SpeechModelId,
+    selected_model_id: SpeechModelId,
+    selected_model_label: &'static str,
+    selected_model_repo: &'static str,
+    selected_model_detail: &'static str,
+    selected_model_size_label: &'static str,
+    selected_model_languages_label: &'static str,
+    selected_model_local_path: String,
+    selected_model_status: String,
+    available_models: Vec<SpeechModelOptionState>,
+    recommended_model_id: SpeechModelId,
+    recommendation_reason: String,
+    device_profile: DeviceProfileState,
     selected_ready: bool,
     selected_reference: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SpeechModelOptionState {
+    id: SpeechModelId,
+    label: &'static str,
+    detail: &'static str,
+    processing_mode: TranscriptionMode,
+    repo: &'static str,
+    local_path: String,
+    ready: bool,
+    languages_label: &'static str,
+    size_label: &'static str,
+    recommended: bool,
 }
 
 #[derive(Clone, Copy, Default, Serialize)]
@@ -327,15 +330,21 @@ struct LocalDiarizationResult {
 impl StoredModelSettings {
     fn from_input(input: SaveModelSettingsInput) -> Result<Self, String> {
         Ok(Self {
-            source: Some(input.source),
-            hugging_face_repo: normalize_hugging_face_repo(&input.hugging_face_repo)?,
-            hugging_face_revision: input.hugging_face_revision.trim().to_string(),
-            hugging_face_local_path: input.hugging_face_local_path.trim().to_string(),
+            processing_mode: Some(input.processing_mode),
+            batch_model_id: Some(normalize_batch_model(input.batch_model_id)),
         })
     }
 
-    fn source(&self) -> ModelSource {
-        self.source.unwrap_or(ModelSource::HuggingFace)
+    fn processing_mode(&self) -> TranscriptionMode {
+        self.processing_mode.unwrap_or_default()
+    }
+
+    fn batch_model_id(&self) -> SpeechModelId {
+        normalize_batch_model(self.batch_model_id.unwrap_or_default())
+    }
+
+    fn selected_model_id(&self) -> SpeechModelId {
+        selected_model(self.processing_mode(), self.batch_model_id())
     }
 }
 
@@ -419,14 +428,11 @@ fn onboarding_state<R: tauri::Runtime>(
 
     Ok(OnboardingState {
         product_name: "unsigned char",
-        engine: match model_settings.source {
-            ModelSource::Bundled => BUNDLED_MODEL_NAME.to_string(),
-            ModelSource::HuggingFace => DEFAULT_MODEL_NAME.to_string(),
-        },
+        engine: model_settings.selected_model_label.to_string(),
         reference: model_settings
             .selected_reference
             .clone()
-            .unwrap_or_else(|| model_settings.bundled_resolved_path.clone()),
+            .unwrap_or_else(|| model_settings.selected_model_local_path.clone()),
         ready: permissions.ready() && model_settings.selected_ready,
         permissions,
     })
@@ -481,11 +487,14 @@ fn download_managed_model<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<ManagedModelDownloadState, String> {
-    let target_dir = managed_model_path(&app)?;
+    let model_settings = effective_model_settings(&load_model_settings(&app)?);
+    let selected_model_id = model_settings.selected_model_id();
+    let target_dir = managed_model_path_for(&app, selected_model_id)?;
     let shared = state.inner().managed_model_download.clone();
 
-    if model_path_is_ready(&target_dir) {
+    if model_path_is_ready(selected_model_id, &target_dir) {
         info!(
+            model_id = selected_model_id.as_str(),
             target_dir = %target_dir.display(),
             "Managed transcription model already available",
         );
@@ -504,11 +513,12 @@ fn download_managed_model<R: tauri::Runtime>(
     }
 
     info!(
+        model_id = selected_model_id.as_str(),
         target_dir = %target_dir.display(),
         "Starting speech-swift transcription model download",
     );
 
-    start_speech_model_download()?;
+    start_speech_model_download(speech_model_repo(selected_model_id))?;
 
     snapshot_managed_model_download_state(&app, &shared)
 }
@@ -517,12 +527,15 @@ fn download_managed_model<R: tauri::Runtime>(
 fn reveal_managed_model_in_finder<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<(), String> {
-    let target_dir = managed_model_path(&app)?;
+    let model_settings = effective_model_settings(&load_model_settings(&app)?);
+    let selected_model_id = model_settings.selected_model_id();
+    let target_dir = managed_model_path_for(&app, selected_model_id)?;
     if !target_dir.exists() {
         return Err("The transcription model has not been downloaded yet.".to_string());
     }
 
     info!(
+        model_id = selected_model_id.as_str(),
         target_dir = %target_dir.display(),
         "Revealing managed transcription model in Finder",
     );
@@ -534,7 +547,9 @@ fn delete_managed_model<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<ManagedModelDownloadState, String> {
-    let target_dir = managed_model_path(&app)?;
+    let model_settings = effective_model_settings(&load_model_settings(&app)?);
+    let selected_model_id = model_settings.selected_model_id();
+    let target_dir = managed_model_path_for(&app, selected_model_id)?;
     let shared = state.inner().managed_model_download.clone();
     let snapshot = snapshot_managed_model_download_state(&app, &shared)?;
 
@@ -542,7 +557,7 @@ fn delete_managed_model<R: tauri::Runtime>(
         return Err("The transcription model is still downloading.".to_string());
     }
 
-    reset_speech_model()?;
+    reset_speech_model(speech_model_repo(selected_model_id))?;
 
     if target_dir.exists() {
         std::fs::remove_dir_all(&target_dir).map_err(|error| {
@@ -554,6 +569,7 @@ fn delete_managed_model<R: tauri::Runtime>(
     }
 
     info!(
+        model_id = selected_model_id.as_str(),
         target_dir = %target_dir.display(),
         "Deleted managed transcription model",
     );
@@ -605,7 +621,11 @@ fn save_model_settings<R: tauri::Runtime>(
     let settings = StoredModelSettings::from_input(settings)?;
     persist_model_settings(&app, &settings)?;
     refresh_selected_model_preload(&app, &app.state::<AppState>().transcription);
-    info!(source = ?settings.source.unwrap_or_default(), "Saved transcription model settings");
+    info!(
+        processing_mode = settings.processing_mode().as_str(),
+        batch_model_id = settings.batch_model_id().as_str(),
+        "Saved transcription model settings",
+    );
     build_model_settings_state(&app, &settings)
 }
 
@@ -858,20 +878,64 @@ fn delete_meeting_export<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+fn delete_meeting_audio<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+) -> Result<(), String> {
+    let target = resolve_meeting_audio_path(&app, &path)?;
+    if target.is_dir() {
+        return Err(format!(
+            "Meeting audio path points to a directory: {}",
+            target.display()
+        ));
+    }
+
+    match std::fs::remove_file(&target) {
+        Ok(()) => {
+            info!(target = %target.display(), "Deleted meeting audio");
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            warn!(target = %target.display(), "Meeting audio delete requested for missing file");
+            Ok(())
+        }
+        Err(error) => Err(format!(
+            "Failed to delete the meeting audio at {}: {error}",
+            target.display()
+        )),
+    }
+}
+
+#[tauri::command]
 async fn start_live_transcription<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
+    meeting_id: String,
 ) -> Result<LiveTranscriptionState, String> {
     let transcription = state.inner().transcription.clone();
-    info!("Starting live transcription session");
+    info!(meeting_id = %meeting_id, "Starting live transcription session");
     tauri::async_runtime::spawn_blocking(move || {
-        let settings = load_model_settings(&app)?;
-        let model_path = resolve_selected_model_path(&app, &settings)?;
-        info!(model_path = %model_path.display(), "Resolved transcription model path");
+        let model_settings = effective_model_settings(&load_model_settings(&app)?);
+        let general_settings = load_general_settings(&app)?;
+        let selected_model_id = model_settings.selected_model_id();
+        let model_path = resolve_selected_model_path(&app, &model_settings)?;
+        let recording_path = meeting_audio_path(&app, &meeting_id)?;
+        info!(
+            model_id = selected_model_id.as_str(),
+            processing_mode = model_settings.processing_mode().as_str(),
+            model_path = %model_path.display(),
+            recording_path = %recording_path.display(),
+            "Resolved transcription session inputs",
+        );
         transcription
             .lock()
             .map_err(|_| "Failed to access transcription state.".to_string())?
-            .start(&model_path)
+            .start(
+                model_settings.processing_mode().as_str(),
+                selected_model_id.as_str(),
+                &recording_path,
+                general_settings.main_language.trim(),
+            )
     })
     .await
     .map_err(|error| format!("Failed to join transcription startup task: {error}"))?
@@ -912,12 +976,12 @@ fn refresh_selected_model_preload<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     transcription: &Arc<Mutex<TranscriptionManager>>,
 ) {
-    let selected_model_path =
-        load_model_settings(app).and_then(|settings| resolve_selected_model_path(app, &settings));
+    let selected_model_id = load_model_settings(app)
+        .map(|settings| effective_model_settings(&settings).selected_model_id());
 
     if let Ok(mut manager) = transcription.lock() {
-        match selected_model_path {
-            Ok(model_path) => manager.preload(&model_path),
+        match selected_model_id {
+            Ok(model_id) => manager.preload(model_id.as_str()),
             Err(_) => manager.clear_preload(),
         }
     }
@@ -1054,65 +1118,74 @@ fn show_settings_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::
     Ok(())
 }
 
-fn default_managed_model_settings<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> Result<StoredModelSettings, String> {
-    Ok(StoredModelSettings {
-        source: Some(ModelSource::HuggingFace),
-        hugging_face_repo: DEFAULT_HUGGING_FACE_MODEL_REPO.to_string(),
-        hugging_face_revision: String::new(),
-        hugging_face_local_path: managed_model_path(app)?.display().to_string(),
-    })
-}
-
-fn effective_model_settings<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-    _settings: &StoredModelSettings,
-) -> Result<StoredModelSettings, String> {
-    default_managed_model_settings(app)
+fn effective_model_settings(settings: &StoredModelSettings) -> StoredModelSettings {
+    StoredModelSettings {
+        processing_mode: Some(settings.processing_mode()),
+        batch_model_id: Some(settings.batch_model_id()),
+    }
 }
 
 fn build_model_settings_state<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     settings: &StoredModelSettings,
 ) -> Result<ModelSettingsState, String> {
-    let settings = effective_model_settings(app, settings)?;
-    let managed_model_path = managed_model_path(app)?;
-    let hugging_face_repo = DEFAULT_HUGGING_FACE_MODEL_REPO.to_string();
-    let hugging_face_revision = DEFAULT_HUGGING_FACE_MODEL_REVISION.to_string();
-    let hugging_face_local_path = managed_model_path.display().to_string();
-    let hugging_face_ready = model_path_is_ready(&managed_model_path);
-    let hugging_face_status = if hugging_face_ready {
-        format!(
-            "Using {DEFAULT_MODEL_NAME} from {}.",
-            managed_model_path.display()
-        )
-    } else {
-        format!(
-            "Download {DEFAULT_MODEL_NAME} once to run local transcription. The files stay cached at {}.",
-            managed_model_path.display()
-        )
-    };
+    let settings = effective_model_settings(settings);
+    let general_settings = load_general_settings(app)?;
+    let device_profile = detect_device_profile();
+    let recommendation = recommend_model(
+        &device_profile,
+        &selected_model_languages(&general_settings),
+        settings.processing_mode(),
+    );
+    let selected_model_id = settings.selected_model_id();
+    let selected_spec = speech_model_spec(selected_model_id);
+    let selected_model_path = managed_model_path_for(app, selected_model_id)?;
+    let selected_ready = model_path_is_ready(selected_model_id, &selected_model_path);
+    let selected_model_status = build_selected_model_status(
+        selected_spec.label,
+        settings.processing_mode(),
+        &selected_model_path,
+        selected_ready,
+    );
+
+    let mut available_models = Vec::with_capacity(SpeechModelId::ALL.len());
+    for model_id in SpeechModelId::ALL {
+        let spec = speech_model_spec(model_id);
+        let local_path = managed_model_path_for(app, model_id)?;
+        available_models.push(SpeechModelOptionState {
+            id: spec.id,
+            label: spec.label,
+            detail: spec.detail,
+            processing_mode: spec.processing_mode,
+            repo: spec.repo,
+            local_path: local_path.display().to_string(),
+            ready: model_path_is_ready(model_id, &local_path),
+            languages_label: spec.languages_label,
+            size_label: spec.size_label,
+            recommended: model_id == recommendation.model_id,
+        });
+    }
 
     Ok(ModelSettingsState {
-        source: settings.source(),
-        bundled_label: BUNDLED_MODEL_NAME,
-        bundled_relative_path: BUNDLED_MODEL_RELATIVE_PATH,
-        bundled_resolved_path: String::new(),
-        bundled_ready: false,
-        bundled_status: "Bundled ASR models are not used in this build.".to_string(),
-        hugging_face_repo,
-        hugging_face_revision,
-        hugging_face_local_path,
-        hugging_face_resolved_path: Some(managed_model_path.display().to_string()),
-        hugging_face_ready,
-        hugging_face_status,
-        uses_managed_model: true,
-        selected_ready: hugging_face_ready,
+        processing_mode: settings.processing_mode(),
+        batch_model_id: settings.batch_model_id(),
+        selected_model_id,
+        selected_model_label: selected_spec.label,
+        selected_model_repo: selected_spec.repo,
+        selected_model_detail: selected_spec.detail,
+        selected_model_size_label: selected_spec.size_label,
+        selected_model_languages_label: selected_spec.languages_label,
+        selected_model_local_path: selected_model_path.display().to_string(),
+        selected_model_status,
+        available_models,
+        recommended_model_id: recommendation.model_id,
+        recommendation_reason: recommendation.reason,
+        device_profile,
+        selected_ready,
         selected_reference: Some(format!(
             "{} ({})",
-            DEFAULT_MODEL_NAME,
-            managed_model_path.display()
+            selected_spec.label,
+            selected_model_path.display()
         )),
     })
 }
@@ -1392,9 +1465,12 @@ fn cleanup_legacy_settings_files<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     }
 }
 
-fn managed_model_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+fn managed_model_path_for<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    model_id: SpeechModelId,
+) -> Result<PathBuf, String> {
     let _ = app;
-    speech_model_path()
+    speech_model_path(speech_model_repo(model_id))
 }
 
 fn meeting_exports_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
@@ -1402,6 +1478,17 @@ fn meeting_exports_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<P
         .document_dir()
         .map(|path| path.join(APP_NAME))
         .map_err(|error| error.to_string())
+}
+
+fn meeting_audio_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
+    meeting_exports_dir(app).map(|path| path.join("audio"))
+}
+
+fn meeting_audio_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    meeting_id: &str,
+) -> Result<PathBuf, String> {
+    Ok(meeting_audio_dir(app)?.join(meeting_audio_file_name(meeting_id)))
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
@@ -1447,6 +1534,34 @@ fn resolve_meeting_export_path<R: tauri::Runtime>(
 
     if resolved.extension().and_then(|value| value.to_str()) != Some("md") {
         return Err("Meeting export path must point to a markdown file.".to_string());
+    }
+
+    Ok(resolved)
+}
+
+fn resolve_meeting_audio_path<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    path: &str,
+) -> Result<PathBuf, String> {
+    let normalized_path = path.trim();
+    if normalized_path.is_empty() {
+        return Err("Meeting audio path is required.".to_string());
+    }
+
+    let audio_dir = normalize_path(&meeting_audio_dir(app)?);
+    let candidate = PathBuf::from(normalized_path);
+    let resolved = if candidate.is_absolute() {
+        normalize_path(&candidate)
+    } else {
+        normalize_path(&audio_dir.join(candidate))
+    };
+
+    if !resolved.starts_with(&audio_dir) {
+        return Err("Meeting audio path is outside the unsigned char audio folder.".to_string());
+    }
+
+    if resolved.extension().and_then(|value| value.to_str()) != Some("wav") {
+        return Err("Meeting audio path must point to a WAV file.".to_string());
     }
 
     Ok(resolved)
@@ -1524,8 +1639,10 @@ fn snapshot_managed_model_download_state<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     shared: &Arc<Mutex<ManagedModelDownloadState>>,
 ) -> Result<ManagedModelDownloadState, String> {
-    let local_path = managed_model_path(app)?;
-    let speech_state = speech_model_download_state()?;
+    let model_settings = effective_model_settings(&load_model_settings(app)?);
+    let selected_model_id = model_settings.selected_model_id();
+    let local_path = managed_model_path_for(app, selected_model_id)?;
+    let speech_state = speech_model_download_state(speech_model_repo(selected_model_id))?;
     let mut download_state = shared
         .lock()
         .map_err(|_| "Failed to access model download state.".to_string())?;
@@ -1535,7 +1652,7 @@ fn snapshot_managed_model_download_state<R: tauri::Runtime>(
     apply_speech_model_download_state(
         &mut download_state,
         speech_state,
-        model_path_is_ready(&local_path),
+        model_path_is_ready(selected_model_id, &local_path),
     );
 
     Ok(download_state.clone())
@@ -1644,15 +1761,6 @@ fn resolve_python_command() -> Result<&'static str, String> {
     )
 }
 
-fn model_path_is_ready(path: &Path) -> bool {
-    path.is_dir()
-        && path.join("config.json").is_file()
-        && path.join("vocab.json").is_file()
-        && path.join("encoder.mlmodelc").is_dir()
-        && path.join("decoder.mlmodelc").is_dir()
-        && path.join("joint.mlmodelc").is_dir()
-}
-
 fn pyannote_path_is_ready(path: &Path) -> bool {
     path.is_dir() && path.join("config.yaml").is_file()
 }
@@ -1696,22 +1804,6 @@ fn resolve_pyannote_pipeline_path(path: &Path) -> Option<PathBuf> {
         .next()
 }
 
-fn normalize_hugging_face_repo(input: &str) -> Result<String, String> {
-    let value = input.trim();
-    if value.is_empty() {
-        return Ok(String::new());
-    }
-
-    if let Some((_, rest)) = value.split_once("huggingface.co/") {
-        let repo = extract_repo_from_hugging_face_url(rest)?;
-        validate_hugging_face_repo(&repo)?;
-        return Ok(repo);
-    }
-
-    validate_hugging_face_repo(value)?;
-    Ok(value.to_string())
-}
-
 fn normalize_hugging_face_token(input: &str) -> Result<String, String> {
     let value = input.trim();
     if value.chars().any(char::is_whitespace) {
@@ -1719,43 +1811,6 @@ fn normalize_hugging_face_token(input: &str) -> Result<String, String> {
     }
 
     Ok(value.to_string())
-}
-
-fn extract_repo_from_hugging_face_url(path: &str) -> Result<String, String> {
-    let segments = path
-        .trim_matches('/')
-        .split('/')
-        .filter(|segment| !segment.is_empty());
-    let mut repo_segments = Vec::new();
-
-    for segment in segments {
-        if matches!(segment, "tree" | "resolve" | "blob" | "commit") {
-            break;
-        }
-        repo_segments.push(segment);
-    }
-
-    if repo_segments.is_empty() {
-        return Err(
-            "Enter a Hugging Face repo like aufklarer/Parakeet-EOU-120M-CoreML-INT8 or paste a repo URL.".to_string(),
-        );
-    }
-
-    Ok(repo_segments.join("/"))
-}
-
-fn validate_hugging_face_repo(repo: &str) -> Result<(), String> {
-    if repo.chars().any(char::is_whitespace) {
-        return Err("Hugging Face repo IDs cannot contain spaces.".to_string());
-    }
-
-    if repo.split('/').any(|segment| segment.is_empty()) {
-        return Err(
-            "Enter a Hugging Face repo like aufklarer/Parakeet-EOU-120M-CoreML-INT8.".to_string(),
-        );
-    }
-
-    Ok(())
 }
 
 fn resolve_hugging_face_token(
@@ -1883,18 +1938,55 @@ fn distinct_speaker_count(segments: &[DiarizationSegment]) -> usize {
 
 fn resolve_selected_model_path<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
-    _settings: &StoredModelSettings,
+    settings: &StoredModelSettings,
 ) -> Result<PathBuf, String> {
-    let selected_path = managed_model_path(app)?;
+    let selected_model_id = settings.selected_model_id();
+    let selected_spec = speech_model_spec(selected_model_id);
+    let selected_path = managed_model_path_for(app, selected_model_id)?;
 
-    if model_path_is_ready(&selected_path) {
+    if model_path_is_ready(selected_model_id, &selected_path) {
         return Ok(selected_path);
     }
 
     Err(format!(
-        "speech-swift is not ready at {}. Download the Parakeet Streaming ASR model first.",
-        selected_path.display()
+        "{} is not ready at {}. Download the selected model first.",
+        selected_spec.label,
+        selected_path.display(),
     ))
+}
+
+fn selected_model_languages(settings: &StoredGeneralSettings) -> Vec<String> {
+    let mut languages = Vec::with_capacity(1 + settings.spoken_languages.len());
+    languages.push(settings.main_language.trim().to_string());
+    languages.extend(
+        settings
+            .spoken_languages
+            .iter()
+            .map(|language| language.trim().to_string()),
+    );
+    languages
+}
+
+fn build_selected_model_status(
+    label: &str,
+    processing_mode: TranscriptionMode,
+    local_path: &Path,
+    ready: bool,
+) -> String {
+    if ready {
+        return format!("Using {label} from {}.", local_path.display());
+    }
+
+    match processing_mode {
+        TranscriptionMode::Realtime => format!(
+            "Download {label} before starting live transcription. The files stay cached at {}.",
+            local_path.display()
+        ),
+        TranscriptionMode::Batch => format!(
+            "Download {label} before post-meeting batch transcription can run. The files stay cached at {}.",
+            local_path.display()
+        ),
+    }
 }
 
 #[derive(Deserialize)]
@@ -2456,6 +2548,7 @@ pub fn run() {
             reveal_meeting_export_in_finder,
             meeting_export_exists,
             delete_meeting_export,
+            delete_meeting_audio,
             start_live_transcription,
             live_transcription_state,
             request_stop_live_transcription

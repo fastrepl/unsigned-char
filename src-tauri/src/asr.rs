@@ -7,15 +7,20 @@ use tracing::info;
 use swift_rs::{swift, Bool, SRString};
 
 #[cfg(target_os = "macos")]
-swift!(fn _speech_model_cache_dir() -> SRString);
+swift!(fn _speech_model_cache_dir(model_id: &SRString) -> SRString);
 #[cfg(target_os = "macos")]
-swift!(fn _speech_model_download_state() -> SRString);
+swift!(fn _speech_model_download_state(model_id: &SRString) -> SRString);
 #[cfg(target_os = "macos")]
-swift!(fn _speech_model_start_download() -> Bool);
+swift!(fn _speech_model_start_download(model_id: &SRString) -> Bool);
 #[cfg(target_os = "macos")]
-swift!(fn _speech_model_reset() -> Bool);
+swift!(fn _speech_model_reset(model_id: &SRString) -> Bool);
 #[cfg(target_os = "macos")]
-swift!(fn _speech_live_transcription_start() -> SRString);
+swift!(fn _speech_live_transcription_start(
+    mode: &SRString,
+    model_id: &SRString,
+    recording_path: &SRString,
+    language: &SRString
+) -> SRString);
 #[cfg(target_os = "macos")]
 swift!(fn _speech_live_transcription_state() -> SRString);
 #[cfg(target_os = "macos")]
@@ -30,6 +35,10 @@ pub struct LiveTranscriptionState {
     pub running: bool,
     pub text: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub audio_path: String,
+    #[serde(default)]
+    pub mode: Option<String>,
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -44,13 +53,19 @@ pub struct SpeechModelDownloadState {
 }
 
 impl TranscriptionManager {
-    pub fn start(&mut self, _model_path: &Path) -> Result<LiveTranscriptionState, String> {
+    pub fn start(
+        &mut self,
+        mode: &str,
+        model_id: &str,
+        recording_path: &Path,
+        language: &str,
+    ) -> Result<LiveTranscriptionState, String> {
         let _ = self.stop();
-        info!("Starting speech-swift transcription session");
-        speech_live_transcription_start()
+        info!(mode, model_id, recording_path = %recording_path.display(), "Starting speech-swift transcription session");
+        speech_live_transcription_start(mode, model_id, recording_path, language)
     }
 
-    pub fn preload(&mut self, _model_path: &Path) {}
+    pub fn preload(&mut self, _model_id: &str) {}
 
     pub fn clear_preload(&mut self) {}
 
@@ -68,10 +83,11 @@ impl TranscriptionManager {
     }
 }
 
-pub fn managed_model_path() -> Result<PathBuf, String> {
+pub fn managed_model_path(model_id: &str) -> Result<PathBuf, String> {
     #[cfg(target_os = "macos")]
     {
-        let path = unsafe { _speech_model_cache_dir() };
+        let model_id: SRString = model_id.into();
+        let path = unsafe { _speech_model_cache_dir(&model_id) };
         Ok(PathBuf::from(path.as_str()))
     }
 
@@ -81,11 +97,12 @@ pub fn managed_model_path() -> Result<PathBuf, String> {
     }
 }
 
-pub fn managed_model_download_state() -> Result<SpeechModelDownloadState, String> {
+pub fn managed_model_download_state(model_id: &str) -> Result<SpeechModelDownloadState, String> {
     #[cfg(target_os = "macos")]
     {
+        let model_id: SRString = model_id.into();
         decode_json(
-            unsafe { _speech_model_download_state() },
+            unsafe { _speech_model_download_state(&model_id) },
             "speech-swift model download state",
         )
     }
@@ -96,10 +113,11 @@ pub fn managed_model_download_state() -> Result<SpeechModelDownloadState, String
     }
 }
 
-pub fn start_managed_model_download() -> Result<(), String> {
+pub fn start_managed_model_download(model_id: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        if unsafe { _speech_model_start_download() } {
+        let model_id: SRString = model_id.into();
+        if unsafe { _speech_model_start_download(&model_id) } {
             return Ok(());
         }
 
@@ -112,10 +130,11 @@ pub fn start_managed_model_download() -> Result<(), String> {
     }
 }
 
-pub fn reset_managed_model() -> Result<(), String> {
+pub fn reset_managed_model(model_id: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        if unsafe { _speech_model_reset() } {
+        let model_id: SRString = model_id.into();
+        if unsafe { _speech_model_reset(&model_id) } {
             return Ok(());
         }
 
@@ -128,11 +147,23 @@ pub fn reset_managed_model() -> Result<(), String> {
     }
 }
 
-fn speech_live_transcription_start() -> Result<LiveTranscriptionState, String> {
+fn speech_live_transcription_start(
+    mode: &str,
+    model_id: &str,
+    recording_path: &Path,
+    language: &str,
+) -> Result<LiveTranscriptionState, String> {
     #[cfg(target_os = "macos")]
     {
+        let mode: SRString = mode.into();
+        let model_id: SRString = model_id.into();
+        let recording_path_string = recording_path.display().to_string();
+        let recording_path: SRString = recording_path_string.as_str().into();
+        let language: SRString = language.into();
         decode_json(
-            unsafe { _speech_live_transcription_start() },
+            unsafe {
+                _speech_live_transcription_start(&mode, &model_id, &recording_path, &language)
+            },
             "speech-swift transcription state",
         )
     }

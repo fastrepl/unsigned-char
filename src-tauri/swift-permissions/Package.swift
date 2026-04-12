@@ -20,7 +20,10 @@ let package = Package(
       name: "PermissionsSwift",
       dependencies: [
         .product(name: "AudioCommon", package: "speech-swift"),
+        .product(name: "OmnilingualASR", package: "speech-swift"),
+        .product(name: "ParakeetASR", package: "speech-swift"),
         .product(name: "ParakeetStreamingASR", package: "speech-swift"),
+        .product(name: "Qwen3ASR", package: "speech-swift"),
         .product(name: "SwiftRs", package: "swift-rs"),
       ],
       path: "src")
