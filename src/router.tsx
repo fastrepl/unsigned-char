@@ -1815,6 +1815,20 @@ function SettingsScreen() {
                 </div>
               </CardHeader>
               <CardPanel className="grid gap-6 pt-0">
+                {!modelReady ? (
+                  <div className="rounded-[calc(var(--radius)-6px)] border border-amber-200 bg-amber-50/80 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="warning">Download required</Badge>
+                      <p className="text-sm font-medium text-amber-950">
+                        {snapshot.modelSettings.selectedModelLabel} needs to be downloaded before it can run locally.
+                      </p>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-amber-900/80">
+                      Download the selected model once to use this transcription setup on this device.
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="grid gap-3">
                   <p className="text-sm font-semibold text-zinc-950">Model</p>
                   <div className="space-y-3">
