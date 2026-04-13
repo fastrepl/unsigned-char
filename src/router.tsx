@@ -39,6 +39,7 @@ import {
   CardPanel,
   CardTitle,
   Input,
+  Kbd,
   ScrollFade,
   Tooltip,
   TooltipPopup,
@@ -323,21 +324,33 @@ function DeleteMeetingDialog({
         className="w-full max-w-md"
         onClick={(event) => event.stopPropagation()}
       >
-        <CardHeader>
-          <CardTitle id="delete-meeting-title">Delete meeting?</CardTitle>
-          <CardDescription id="delete-meeting-description">
-            Delete &quot;{meeting.title}&quot; from unsigned {"{char}"}? This also removes its
-            saved markdown export.
-          </CardDescription>
-        </CardHeader>
-        <CardFooter className="justify-end">
-          <Button variant="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={() => onConfirm(meeting.id)}>
-            Delete
-          </Button>
-        </CardFooter>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onConfirm(meeting.id);
+          }}
+        >
+          <CardHeader>
+            <CardTitle id="delete-meeting-title">Delete meeting?</CardTitle>
+            <CardDescription id="delete-meeting-description">
+              Delete &quot;{meeting.title}&quot; from unsigned {"{char}"}? This also removes its
+              saved markdown export.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="justify-between gap-3">
+            <p className="text-sm text-zinc-500">
+              Press <Kbd className="mx-1 align-middle">Enter</Kbd> to confirm
+            </p>
+            <div className="flex items-center gap-3">
+              <Button variant="secondary" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button variant="destructive" type="submit" autoFocus>
+                Delete
+              </Button>
+            </div>
+          </CardFooter>
+        </form>
       </Card>
     </div>
   );
