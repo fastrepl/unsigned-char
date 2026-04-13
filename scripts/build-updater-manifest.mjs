@@ -3,6 +3,8 @@ import path from "node:path";
 
 const root = process.cwd();
 const version = process.argv[2];
+const repository = process.env.GITHUB_REPOSITORY ?? "fastrepl/unsigned-char";
+const updaterAssetName = "unsigned-char-aarch64.app.tar.gz";
 
 if (!version) {
   throw new Error("Expected a version argument, e.g. `node scripts/build-updater-manifest.mjs 0.0.1`.");
@@ -26,7 +28,7 @@ if (!archiveName) {
 }
 
 const signatureName = `${archiveName}.sig`;
-const archiveUrl = `https://github.com/ComputelessComputer/unsigned-char/releases/download/v${version}/${encodeURIComponent(archiveName)}`;
+const archiveUrl = `https://github.com/${repository}/releases/download/v${version}/${updaterAssetName}`;
 const signaturePath = path.join(bundlePath, signatureName);
 const notes = await readFile(releaseNotesPath, "utf8");
 const signature = (await readFile(signaturePath, "utf8")).trim();

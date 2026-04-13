@@ -54,7 +54,16 @@ jobs:
       - name: Generate updater manifest
         run: node scripts/build-updater-manifest.mjs "${GITHUB_REF_NAME#v}"
 
-      - name: Upload updater manifest
+      - name: Upload updater assets and manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" latest.json --clobber
+        run: |
+          archive="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app.tar.gz' | head -n 1)"
+          signature="${archive}.sig"
+          cp "$archive" unsigned-char-aarch64.app.tar.gz
+          cp "$signature" unsigned-char-aarch64.app.tar.gz.sig
+          gh release upload "$GITHUB_REF_NAME" \
+            unsigned-char-aarch64.app.tar.gz \
+            unsigned-char-aarch64.app.tar.gz.sig \
+            latest.json \
+            --clobber
