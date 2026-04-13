@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,6 +19,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve release version
+        id: release_meta
+        run: |
+          version="$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version)")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -37,22 +49,71 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Import Apple certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+
+          certificate = os.environ["APPLE_CERTIFICATE"]
+          with open("certificate.p12", "wb") as handle:
+            handle.write(base64.b64decode(certificate))
+          PY
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security find-identity -v -p codesigning build.keychain
+
+      - name: Resolve signing identity
+        id: signing_identity
+        run: |
+          cert_info="$(
+            security find-identity -v -p codesigning build.keychain | grep "Developer ID Application" | head -n 1
+          )"
+          if [ -z "$cert_info" ]; then
+            cert_info="$(
+              security find-identity -v -p codesigning build.keychain | grep "Apple Development" | head -n 1
+            )"
+          fi
+          if [ -z "$cert_info" ]; then
+            echo "No signing identity found in build.keychain" >&2
+            exit 1
+          fi
+          cert_id="$(echo "$cert_info" | awk -F'"' '{print $2}')"
+          echo "identity=$cert_id" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub release and upload bundles
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD || secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.signing_identity.outputs.identity }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: "unsigned {char} v__VERSION__"
+          tagName: ${{ steps.release_meta.outputs.tag }}
+          releaseName: "unsigned {char} v${{ steps.release_meta.outputs.version }}"
           releaseBody: "See release notes for details and download assets below."
           releaseDraft: false
           prerelease: false
           args: --target aarch64-apple-darwin
 
       - name: Generate updater manifest
-        run: node scripts/build-updater-manifest.mjs "${GITHUB_REF_NAME#v}"
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/build-updater-manifest.mjs "${{ steps.release_meta.outputs.version }}"
 
       - name: Upload updater assets and manifest
         env:
@@ -62,7 +123,7 @@ jobs:
           signature="${archive}.sig"
           cp "$archive" unsigned-char-aarch64.app.tar.gz
           cp "$signature" unsigned-char-aarch64.app.tar.gz.sig
-          gh release upload "$GITHUB_REF_NAME" \
+          gh release upload "${{ steps.release_meta.outputs.tag }}" \
             unsigned-char-aarch64.app.tar.gz \
             unsigned-char-aarch64.app.tar.gz.sig \
             latest.json \
