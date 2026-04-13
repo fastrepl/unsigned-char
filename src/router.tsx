@@ -1040,13 +1040,13 @@ function MeetingScreen() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+        <div className="flex items-end gap-3">
           <div className="min-w-0 flex-1" data-window-drag="false">
             <MeetingTitleField key={meeting.id} meetingId={meeting.id} title={meeting.title} />
           </div>
 
           <NumberField
-            className="w-full shrink-0 sm:w-[148px]"
+            className="w-[140px] shrink-0"
             data-window-drag="false"
             disabled={snapshot.transcriptionBusy || snapshot.diarizationRunBusy}
             min={1}
