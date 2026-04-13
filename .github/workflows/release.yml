@@ -89,26 +89,8 @@ jobs:
           cert_id="$(echo "$cert_info" | awk -F'"' '{print $2}')"
           echo "identity=$cert_id" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare updater signing key
+      - name: Build signed release bundles
         env:
-          TAURI_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          {
-            echo "TAURI_SIGNING_PRIVATE_KEY<<EOF"
-            printf '%s\n' "$TAURI_SIGNING_PRIVATE_KEY_SECRET"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
-          {
-            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD<<EOF"
-            printf '%s\n' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
-
-      - name: Create GitHub release and upload bundles
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD || secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -116,13 +98,22 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ steps.signing_identity.outputs.identity }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        with:
-          tagName: ${{ steps.release_meta.outputs.tag }}
-          releaseName: "unsigned {char} v${{ steps.release_meta.outputs.version }}"
-          releaseBody: "See release notes for details and download assets below."
-          releaseDraft: false
-          prerelease: false
-          args: --target aarch64-apple-darwin
+          TAURI_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_SECRET" > updater.key
+          export TAURI_SIGNING_PRIVATE_KEY="$(cat updater.key)"
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET"
+          bun run tauri build --target aarch64-apple-darwin
+
+      - name: Ensure GitHub release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ steps.release_meta.outputs.tag }}" >/dev/null 2>&1 || \
+            gh release create "${{ steps.release_meta.outputs.tag }}" \
+              --title "unsigned {char} v${{ steps.release_meta.outputs.version }}" \
+              --notes-file release-notes.md
 
       - name: Generate updater manifest
         env:
@@ -133,11 +124,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          dmg="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -n 1)"
           archive="$(find src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app.tar.gz' | head -n 1)"
           signature="${archive}.sig"
+          cp "$dmg" unsigned-char-aarch64.dmg
           cp "$archive" unsigned-char-aarch64.app.tar.gz
           cp "$signature" unsigned-char-aarch64.app.tar.gz.sig
           gh release upload "${{ steps.release_meta.outputs.tag }}" \
+            unsigned-char-aarch64.dmg \
             unsigned-char-aarch64.app.tar.gz \
             unsigned-char-aarch64.app.tar.gz.sig \
             latest.json \
