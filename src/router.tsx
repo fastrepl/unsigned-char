@@ -1598,14 +1598,20 @@ function MeetingScreen() {
         />
       ) : null}
 
-      <div className={cn("-mx-4 min-h-0 flex-1", showDiarizationBottomBanner && "pb-24")}>
+      <div className="-mx-4 min-h-0 flex-1">
         <div className="relative h-full min-h-0">
           <div
             className="h-full overflow-y-auto"
             ref={attachTranscriptRef}
             onScroll={handleTranscriptScroll}
           >
-            <div className={cn("flex min-h-full flex-col gap-4 px-4", showTranscriptEmptyState && "h-full")}>
+            <div
+              className={cn(
+                "flex min-h-full flex-col gap-4 px-4 pb-4",
+                showTranscriptEmptyState && "h-full",
+                showDiarizationBottomBanner && "pb-24",
+              )}
+            >
               {showSummaryCard ? (
                 <Card>
                   <CardHeader className="flex-row items-start justify-between gap-4">
