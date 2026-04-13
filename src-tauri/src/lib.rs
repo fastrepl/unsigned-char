@@ -43,6 +43,7 @@ const LEGACY_DIARIZATION_SETTINGS_FILE: &str = "diarization-settings.json";
 const CHECK_FOR_UPDATES_MENU_ID: &str = "check-for-updates";
 const CHECK_FOR_UPDATES_EVENT: &str = "check-for-updates";
 const OPEN_SETTINGS_MENU_ID: &str = "open-settings";
+const MAIN_WINDOW_LABEL: &str = "main";
 const SETTINGS_WINDOW_LABEL: &str = "settings";
 const CHAR_WEBSITE_URL: &str = "https://char.com";
 const DIARIZATION_PROVIDER_LABEL: &str = "speech-swift";
@@ -1215,6 +1216,21 @@ fn show_settings_window<R: tauri::Runtime>(
     window.set_focus()?;
 
     Ok(())
+}
+
+fn emit_check_for_updates_event<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let target = app
+        .webview_windows()
+        .into_values()
+        .find(|window| window.is_focused().unwrap_or(false))
+        .map(|window| window.label().to_string())
+        .or_else(|| {
+            app.get_webview_window(SETTINGS_WINDOW_LABEL)
+                .map(|window| window.label().to_string())
+        })
+        .unwrap_or_else(|| MAIN_WINDOW_LABEL.to_string());
+
+    let _ = app.emit_to(target, CHECK_FOR_UPDATES_EVENT, ());
 }
 
 fn effective_model_settings<R: tauri::Runtime>(
@@ -2480,6 +2496,7 @@ pub fn run() {
     }
 
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
         .setup(|app| {
@@ -2493,7 +2510,7 @@ pub fn run() {
             if event.id() == OPEN_SETTINGS_MENU_ID {
                 let _ = show_settings_window(app, None);
             } else if event.id() == CHECK_FOR_UPDATES_MENU_ID {
-                let _ = app.emit(CHECK_FOR_UPDATES_EVENT, ());
+                emit_check_for_updates_event(app);
             }
         })
         .invoke_handler(tauri::generate_handler![

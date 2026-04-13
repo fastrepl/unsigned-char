@@ -1,8 +1,11 @@
+import { confirm, message } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
 const CHECK_FOR_UPDATES_EVENT = "check-for-updates";
+const MAIN_WINDOW_LABEL = "main";
 
 let updaterStarted = false;
 let updateCheckInFlight = false;
@@ -17,10 +20,25 @@ function formatUpdateMessage(version: string, notes?: string | null) {
   return `unsigned Char ${version} is available.\n\n${normalizedNotes}\n\nInstall it now?`;
 }
 
+function formatUpdateError(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  return "Unknown updater error.";
+}
+
 async function runUpdateCheck(options: { userInitiated: boolean }) {
   if (import.meta.env.DEV || typeof window === "undefined") {
     if (options.userInitiated) {
-      window.alert("Update checks are unavailable in development builds.");
+      await message("Update checks are unavailable in development builds.", {
+        kind: "info",
+        title: "Updates Unavailable",
+      });
     }
 
     return;
@@ -28,7 +46,10 @@ async function runUpdateCheck(options: { userInitiated: boolean }) {
 
   if (updateCheckInFlight) {
     if (options.userInitiated) {
-      window.alert("An update check is already in progress.");
+      await message("An update check is already in progress.", {
+        kind: "info",
+        title: "Checking for Updates",
+      });
     }
 
     return;
@@ -41,13 +62,21 @@ async function runUpdateCheck(options: { userInitiated: boolean }) {
 
     if (!update) {
       if (options.userInitiated) {
-        window.alert("unsigned Char is up to date.");
+        await message("You're running the latest version of unsigned Char.", {
+          kind: "info",
+          title: "No Updates Available",
+        });
       }
 
       return;
     }
 
-    const shouldInstall = window.confirm(formatUpdateMessage(update.version, update.body));
+    const shouldInstall = await confirm(formatUpdateMessage(update.version, update.body), {
+      kind: "info",
+      title: "Update Available",
+      okLabel: "Install",
+      cancelLabel: "Later",
+    });
 
     if (!shouldInstall) {
       return;
@@ -55,8 +84,14 @@ async function runUpdateCheck(options: { userInitiated: boolean }) {
 
     await update.downloadAndInstall();
 
-    const shouldRestart = window.confirm(
+    const shouldRestart = await confirm(
       `unsigned Char ${update.version} was installed. Restart now to finish the update?`,
+      {
+        kind: "info",
+        title: "Update Installed",
+        okLabel: "Restart",
+        cancelLabel: "Later",
+      },
     );
 
     if (shouldRestart) {
@@ -66,7 +101,10 @@ async function runUpdateCheck(options: { userInitiated: boolean }) {
     console.warn("Updater check failed", error);
 
     if (options.userInitiated) {
-      window.alert("Unable to check for updates right now.");
+      await message(`Unable to check for updates right now.\n\n${formatUpdateError(error)}`, {
+        kind: "error",
+        title: "Update Error",
+      });
     }
   } finally {
     updateCheckInFlight = false;
@@ -79,10 +117,13 @@ export async function startUpdater() {
   }
 
   updaterStarted = true;
+  const currentWindow = getCurrentWindow();
 
   await listen(CHECK_FOR_UPDATES_EVENT, () => {
     void runUpdateCheck({ userInitiated: true });
   });
 
-  void runUpdateCheck({ userInitiated: false });
+  if (currentWindow.label === MAIN_WINDOW_LABEL) {
+    void runUpdateCheck({ userInitiated: false });
+  }
 }
