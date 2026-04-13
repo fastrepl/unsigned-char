@@ -29,6 +29,8 @@ bun install
 bun desktop
 ```
 
+`bun desktop` builds and opens the bundled debug app so macOS privacy prompts are attached to the real `unsigned char.app` bundle. If you want the faster hot-reload loop, use `bun desktop:dev`, but microphone and system-audio permissions may not register there.
+
 ## CLI
 
 Bundled app builds include `uchar` inside the app bundle:

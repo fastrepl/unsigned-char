@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "unsigned {char}",
+  "productName": "unsigned char",
   "version": "0.0.1",
   "identifier": "com.johnjeong.unsignedchar",
   "build": {
