@@ -27,56 +27,13 @@ private func mapCaptureMicrophoneStatus(_ status: AVAuthorizationStatus) -> Int 
   }
 }
 
-@available(macOS 14.0, *)
-private func mapAudioApplicationPermission(_ permission: AVAudioApplication.recordPermission) -> Int {
-  switch permission {
-  case .granted:
-    grantedValue
-  case .undetermined:
-    neverRequestedValue
-  case .denied:
-    deniedValue
-  @unknown default:
-    errorValue
-  }
-}
-
-private func captureMicrophonePermissionStatus() -> Int {
+@_cdecl("_microphone_permission_status")
+public func _microphone_permission_status() -> Int {
   mapCaptureMicrophoneStatus(AVCaptureDevice.authorizationStatus(for: .audio))
 }
 
-private func combinedMicrophonePermissionStatus(appStatus: Int, captureStatus: Int) -> Int {
-  if appStatus == grantedValue || captureStatus == grantedValue {
-    return grantedValue
-  }
-
-  if appStatus == errorValue {
-    return captureStatus
-  }
-
-  if captureStatus == errorValue {
-    return appStatus
-  }
-
-  if appStatus == deniedValue || captureStatus == deniedValue {
-    return deniedValue
-  }
-
-  return neverRequestedValue
-}
-
-private func currentMicrophonePermissionStatus() -> Int {
-  let captureStatus = captureMicrophonePermissionStatus()
-
-  if #available(macOS 14.0, *) {
-    let appStatus = mapAudioApplicationPermission(AVAudioApplication.shared.recordPermission)
-    return combinedMicrophonePermissionStatus(appStatus: appStatus, captureStatus: captureStatus)
-  }
-
-  return captureStatus
-}
-
-private func requestCaptureMicrophonePermission() -> Bool {
+@_cdecl("_request_microphone_permission")
+public func _request_microphone_permission() -> Bool {
   let status = AVCaptureDevice.authorizationStatus(for: .audio)
 
   switch status {
@@ -98,58 +55,6 @@ private func requestCaptureMicrophonePermission() -> Bool {
   @unknown default:
     return false
   }
-}
-
-@available(macOS 14.0, *)
-private func requestAppMicrophonePermission() -> Bool {
-  switch AVAudioApplication.shared.recordPermission {
-  case .granted:
-    return true
-  case .denied:
-    return false
-  case .undetermined:
-    let semaphore = DispatchSemaphore(value: 0)
-    var granted = false
-
-    AVAudioApplication.requestRecordPermission { allowed in
-      granted = allowed
-      semaphore.signal()
-    }
-
-    _ = semaphore.wait(timeout: .now() + .seconds(60))
-    return granted
-  @unknown default:
-    return false
-  }
-}
-
-@_cdecl("_microphone_permission_status")
-public func _microphone_permission_status() -> Int {
-  currentMicrophonePermissionStatus()
-}
-
-@_cdecl("_request_microphone_permission")
-public func _request_microphone_permission() -> Bool {
-  if currentMicrophonePermissionStatus() == grantedValue {
-    return true
-  }
-
-  if #available(macOS 14.0, *) {
-    let appStatus = mapAudioApplicationPermission(AVAudioApplication.shared.recordPermission)
-    if appStatus == neverRequestedValue && requestAppMicrophonePermission() {
-      return true
-    }
-
-    if currentMicrophonePermissionStatus() == grantedValue {
-      return true
-    }
-  }
-
-  if requestCaptureMicrophonePermission() {
-    return true
-  }
-
-  return currentMicrophonePermissionStatus() == grantedValue
 }
 
 @_cdecl("_audio_capture_permission_status")
