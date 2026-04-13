@@ -1258,9 +1258,9 @@ function SettingsScreen() {
   return (
     <section className={cn("flex min-h-0 flex-col", windowShellHeightClass)}>
       <div className="relative -mx-4 min-h-0 flex-1">
-        <div className="h-full overflow-y-auto px-5 pt-5 pr-6 pb-6">
-          <div className={cn("mx-auto flex flex-col gap-6", settingsContentWidthClass)}>
-            <Card>
+        <div className="h-full overflow-y-auto">
+          <div className={cn("mx-auto flex flex-col gap-6 px-5 pt-5 pb-6", settingsContentWidthClass)}>
+            <Card className="overflow-visible">
               <CardHeader className="flex-row items-start justify-between gap-4">
                 <div className="space-y-1">
                   <CardTitle>Transcription model</CardTitle>
@@ -1392,7 +1392,7 @@ function SettingsScreen() {
               ) : null}
             </Card>
 
-            <Card>
+            <Card className="overflow-visible">
               <CardHeader className="flex-row items-start justify-between gap-4">
                 <div className="space-y-1">
                   <CardTitle>AI summaries</CardTitle>
@@ -1521,7 +1521,7 @@ function SettingsScreen() {
               </CardFooter>
             </Card>
 
-            <Card>
+            <Card className="overflow-visible">
               <CardHeader>
                 <CardTitle>Preferences</CardTitle>
                 <CardDescription>Language and timeline defaults for the local app.</CardDescription>
