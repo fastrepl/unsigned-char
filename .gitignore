@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+latest.json
 src-tauri/target
 src-tauri/gen
 .codex/

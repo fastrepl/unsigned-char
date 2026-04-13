@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import { AppRouter } from "./router";
 import { appStore } from "./store";
+import { startUpdater } from "./updates";
 
 const root = document.querySelector<HTMLElement>("#app");
 
@@ -12,6 +13,7 @@ if (!root) {
 }
 
 void appStore.start();
+void startUpdater();
 
 createRoot(root).render(
   <StrictMode>

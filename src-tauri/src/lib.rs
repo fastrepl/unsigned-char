@@ -2619,8 +2619,11 @@ fn sanitize_path_component(input: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
         .setup(|app| {
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
             app.set_menu(build_app_menu(app.handle())?)?;
             refresh_selected_model_preload(app.handle(), &app.state::<AppState>().transcription);
             Ok(())
