@@ -89,6 +89,22 @@ jobs:
           cert_id="$(echo "$cert_info" | awk -F'"' '{print $2}')"
           echo "identity=$cert_id" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare updater signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          {
+            echo "TAURI_SIGNING_PRIVATE_KEY<<EOF"
+            printf '%s\n' "$TAURI_SIGNING_PRIVATE_KEY_SECRET"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+          {
+            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD<<EOF"
+            printf '%s\n' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Create GitHub release and upload bundles
         uses: tauri-apps/tauri-action@v0
         env:
@@ -100,8 +116,6 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ steps.signing_identity.outputs.identity }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ steps.release_meta.outputs.tag }}
           releaseName: "unsigned {char} v${{ steps.release_meta.outputs.version }}"
