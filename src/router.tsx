@@ -1168,11 +1168,21 @@ function MeetingScreen() {
             </TooltipTrigger>
           )}
           <TooltipPopup side="bottom" align="start">
-            <div className="space-y-1">
+            <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">
                 {summaryTooltipTitle}
               </p>
               <p>{summaryActionHint}</p>
+              <Button
+                size="xs"
+                variant="secondary"
+                className="w-full justify-center border-white/10 bg-white/10 text-white hover:bg-white/16 data-pressed:bg-white/14"
+                onClick={() => {
+                  void appStore.openSettingsWindow();
+                }}
+              >
+                Open preferences
+              </Button>
             </div>
           </TooltipPopup>
         </Tooltip>

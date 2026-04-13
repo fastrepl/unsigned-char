@@ -2459,6 +2459,17 @@ async function removeSummaryApiKey() {
   await saveSummarySettings({ clearApiKey: true });
 }
 
+async function openSettingsWindow() {
+  try {
+    await invoke("open_settings_window");
+  } catch (error) {
+    patch({
+      meetingNote:
+        error instanceof Error ? error.message : `Could not open preferences: ${String(error)}`,
+    });
+  }
+}
+
 async function generateMeetingSummary(meetingId: string) {
   const meeting = getMeeting(meetingId);
   if (!meeting || state.summaryMeetingId) {
@@ -2568,6 +2579,7 @@ export const appStore = {
   setSummaryApiKey,
   saveSummarySettings,
   removeSummaryApiKey,
+  openSettingsWindow,
   refreshSettingsWindowData,
   generateMeetingSummary,
   getMeetingById,
