@@ -209,6 +209,38 @@ function StatusBadge({
   );
 }
 
+function SettingsStatusDot({
+  active,
+  label,
+}: {
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <span
+      className="relative inline-flex size-3 shrink-0 items-center justify-center"
+      aria-label={label}
+      title={label}
+    >
+      {active ? (
+        <span
+          aria-hidden="true"
+          className="absolute inline-flex size-3 animate-ping rounded-full bg-sky-400/45 motion-reduce:animate-none"
+        />
+      ) : null}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "relative inline-flex size-2 rounded-full",
+          active
+            ? "bg-sky-500 shadow-[0_0_0_4px_rgba(14,165,233,0.12)]"
+            : "bg-rose-500 shadow-[0_0_0_4px_rgba(244,63,94,0.12)]",
+        )}
+      />
+    </span>
+  );
+}
+
 function modelCapabilityLabel(processingMode: "realtime" | "batch") {
   return processingMode === "realtime" ? "Realtime" : "Batch only";
 }
@@ -1489,7 +1521,7 @@ function SettingsScreen() {
       : modelReady
         ? "ready"
         : "needs setup";
-  const modelStatusTone = downloadStatus === "downloading" ? "missing" : modelReady ? "ready" : "missing";
+  const modelStatusActive = downloadStatus === "downloading" || modelReady;
   const setupBanner = currentSetupBannerContent(snapshot);
   const selectedModel = modelSettings.availableModels.find(
     (option) => option.id === modelSettings.selectedModelId,
@@ -1510,11 +1542,7 @@ function SettingsScreen() {
     : snapshot.summarySettings.ready
       ? "ready"
       : "needs setup";
-  const summaryStatusTone = !snapshot.summarySettings.provider
-    ? "off"
-    : snapshot.summarySettings.ready
-      ? "ready"
-      : "missing";
+  const summaryStatusActive = snapshot.summarySettings.ready;
   const summarySettingsDirty =
     snapshot.summaryDraft.provider !== snapshot.summarySettings.provider ||
     snapshot.summaryDraft.model.trim() !== snapshot.summarySettings.model.trim() ||
@@ -1584,11 +1612,11 @@ function SettingsScreen() {
             </Card>
 
             <Card className="overflow-visible">
-              <CardHeader className="flex-row items-start justify-between gap-4 pb-2">
-                <CardTitle>Transcription model</CardTitle>
-                <CardAction>
-                  <StatusBadge tone={modelStatusTone}>{modelStatusLabel}</StatusBadge>
-                </CardAction>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2.5">
+                  <CardTitle>Transcription model</CardTitle>
+                  <SettingsStatusDot active={modelStatusActive} label={modelStatusLabel} />
+                </div>
               </CardHeader>
               <CardPanel className="grid gap-6 pt-0">
                 <div className="grid gap-3">
@@ -1723,11 +1751,11 @@ function SettingsScreen() {
             </Card>
 
             <Card className="overflow-visible">
-              <CardHeader className="flex-row items-start justify-between gap-4 pb-2">
-                <CardTitle>AI summaries</CardTitle>
-                <CardAction>
-                  <StatusBadge tone={summaryStatusTone}>{summaryStatusLabel}</StatusBadge>
-                </CardAction>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2.5">
+                  <CardTitle>AI summaries</CardTitle>
+                  <SettingsStatusDot active={summaryStatusActive} label={summaryStatusLabel} />
+                </div>
               </CardHeader>
               <CardPanel className="grid gap-6 pt-0">
                 <div className="grid gap-3">
