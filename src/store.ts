@@ -1511,6 +1511,12 @@ function waitForDelay(ms: number) {
   });
 }
 
+function waitForNextFrame() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+}
+
 async function requestStopLiveTranscriptionSession() {
   const snapshot = await invoke<LiveTranscriptionState>("request_stop_live_transcription");
   const liveTranscriptEntries = normalizeTranscriptEntries(snapshot.entries);
@@ -1676,6 +1682,8 @@ async function startMeeting() {
     permissionNote: "",
     meetingNote: "",
   });
+
+  await waitForNextFrame();
 
   try {
     await ensureModelReady();
