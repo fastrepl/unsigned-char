@@ -9,7 +9,7 @@ import {
   useParams,
 } from "@tanstack/react-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Bird, Bot, ChevronDown, ChevronLeft, Cloud, Cpu, Ellipsis, Globe2, PlugZap, Users } from "lucide-react";
+import { ChevronDown, ChevronLeft, Cloud, Cpu, Ellipsis, Globe2, PlugZap, Users } from "lucide-react";
 import {
   type KeyboardEvent,
   type MouseEvent,
@@ -24,9 +24,11 @@ import anthropicLogo from "./assets/provider-icons/anthropic.png";
 import brandWordmark from "./assets/brand-wordmark.svg";
 import googleLogo from "./assets/provider-icons/google.png";
 import lmStudioLogo from "./assets/provider-icons/lmstudio.png";
+import nvidiaLogo from "./assets/provider-icons/nvidia.png";
 import ollamaLogo from "./assets/provider-icons/ollama.png";
 import openAILogo from "./assets/provider-icons/openai.png";
 import openRouterLogo from "./assets/provider-icons/openrouter.png";
+import qwenLogo from "./assets/provider-icons/qwen.png";
 import {
   NumberField,
   NumberFieldDecrement,
@@ -67,6 +69,7 @@ import {
   sortedMeetings,
   type ManagedModelDownloadState,
   type Meeting,
+  type SpeechModelId,
   type TranscriptEntry,
   useAppState,
 } from "./store";
@@ -520,7 +523,7 @@ type SearchableOption = {
   value: string;
   label: string;
   detail?: string;
-  icon?: "parakeet" | "omnilingual" | "qwen" | "cloud" | "local" | "custom" | "disabled";
+  icon?: "omnilingual" | "cloud" | "local" | "custom" | "disabled";
   logoSrc?: string;
   logoClassName?: string;
   badges?: readonly {
@@ -562,8 +565,6 @@ function SearchableOptionPrefix({
     disabled: <PlugZap className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
     local: <Cpu className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
     omnilingual: <Globe2 className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
-    parakeet: <Bird className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
-    qwen: <Bot className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
   } satisfies Record<NonNullable<SearchableOption["icon"]>, ReactNode>;
 
   const toneClassName = {
@@ -572,8 +573,6 @@ function SearchableOptionPrefix({
     disabled: "text-zinc-500",
     local: "text-emerald-700",
     omnilingual: "text-amber-700",
-    parakeet: "text-cyan-700",
-    qwen: "text-violet-700",
   } satisfies Record<NonNullable<SearchableOption["icon"]>, string>;
 
   return (
@@ -596,6 +595,18 @@ const summaryProviderLogoClassNames: Partial<Record<SummaryProviderId, string>> 
   lmstudio: "size-6",
   ollama: "size-6",
   openrouter: "size-6",
+};
+
+const batchModelLogos: Partial<Record<SpeechModelId, string>> = {
+  parakeetBatch: nvidiaLogo,
+  qwen3Large: qwenLogo,
+  qwen3Small: qwenLogo,
+};
+
+const batchModelLogoClassNames: Partial<Record<SpeechModelId, string>> = {
+  parakeetBatch: "size-6",
+  qwen3Large: "size-6",
+  qwen3Small: "size-6",
 };
 
 const summaryProviderOptions: readonly SearchableOption[] = [
@@ -1725,17 +1736,16 @@ function SettingsScreen() {
       value: option.id,
       label: batchModelPickerLabel(option.id, option.label),
       detail: option.sizeLabel,
-      icon:
-        option.id === "parakeetBatch"
-          ? "parakeet"
-          : option.id === "omnilingual"
-            ? "omnilingual"
-            : "qwen",
+      icon: option.id === "omnilingual" ? "omnilingual" : undefined,
+      logoSrc: batchModelLogos[option.id],
+      logoClassName: batchModelLogoClassNames[option.id],
       badges: batchModelPickerBadges(option.id),
       searchTerms:
         option.id === "parakeetBatch"
-          ? [option.label, "Parakeet Streaming", "streaming", "realtime", option.languagesLabel]
-          : [option.languagesLabel],
+          ? [option.label, "Parakeet Streaming", "streaming", "realtime", option.languagesLabel, "NVIDIA"]
+          : option.id.startsWith("qwen")
+            ? [option.languagesLabel, "Qwen"]
+            : [option.languagesLabel],
     }));
   const selectedBatchSupportsRealtime = batchModelSupportsRealtime(modelSettings.batchModelId);
   const selectedSummaryProvider = getSummaryProviderDefinition(snapshot.summaryDraft.provider);
