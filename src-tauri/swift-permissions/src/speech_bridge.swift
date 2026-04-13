@@ -232,18 +232,20 @@ private struct FileTranscriptionPayload: Codable {
   var error: String?
 }
 
-private struct DiarizationSegmentPayload: Codable {
+private struct DiarizationSegmentPayload: Codable, Sendable {
   var speaker: String
   var startSeconds: Double
   var endSeconds: Double
 }
 
-private struct FileDiarizationPayload: Codable {
+private struct FileDiarizationPayload: Codable, Sendable {
   var segments: [DiarizationSegmentPayload]
   var speakerCount: Int
   var pipelineSource: String
   var error: String?
 }
+
+private let diarizationPipelineSource = "speech-swift / sortformer"
 
 private func constrainDiarizedSegments(
   _ segments: [DiarizedSegment],
@@ -826,15 +828,73 @@ private final class LiveTranscriptionSession {
   }
 }
 
+private actor DiarizationPipeline {
+  private var diarizer: SortformerDiarizer?
+  private var diarizerTask: Task<SortformerDiarizer, Error>?
+
+  func diarizeAudioFile(
+    atPath path: String,
+    speakerCount: Int
+  ) async throws -> FileDiarizationPayload {
+    let requestedSpeakerCount = speakerCount > 0 ? speakerCount : nil
+    let url = URL(fileURLWithPath: path)
+    let audio = try AudioFileLoader.load(url: url, targetSampleRate: 16000)
+    let diarizer = try await ensureLoaded()
+    let result = diarizer.diarize(audio: audio, sampleRate: 16000, config: .default)
+    let segments = constrainDiarizedSegments(
+      result.segments,
+      requestedSpeakerCount: requestedSpeakerCount
+    )
+
+    return FileDiarizationPayload(
+      segments: segments.map { segment in
+        DiarizationSegmentPayload(
+          speaker: "speaker_\(segment.speakerId)",
+          startSeconds: Double(segment.startTime),
+          endSeconds: Double(segment.endTime)
+        )
+      },
+      speakerCount: Set(segments.map(\.speakerId)).count,
+      pipelineSource: diarizationPipelineSource,
+      error: nil
+    )
+  }
+
+  private func ensureLoaded() async throws -> SortformerDiarizer {
+    if let diarizer {
+      return diarizer
+    }
+
+    if let task = diarizerTask {
+      let diarizer = try await task.value
+      self.diarizer = diarizer
+      return diarizer
+    }
+
+    let task = Task<SortformerDiarizer, Error> {
+      try await SortformerDiarizer.fromPretrained()
+    }
+    diarizerTask = task
+
+    do {
+      let diarizer = try await task.value
+      self.diarizer = diarizer
+      diarizerTask = nil
+      return diarizer
+    } catch {
+      diarizerTask = nil
+      throw error
+    }
+  }
+}
+
 private actor SpeechBridge {
   static let shared = SpeechBridge()
-  private static let diarizationPipelineSource = "speech-swift / sortformer"
 
   private var loadedModels: [SpeechModelKind: LoadedSpeechModel] = [:]
   private var modelTasks: [SpeechModelKind: Task<LoadedSpeechModel, Error>] = [:]
   private var downloadStates: [SpeechModelKind: ModelDownloadPayload] = [:]
-  private var diarizer: SortformerDiarizer?
-  private var diarizerTask: Task<SortformerDiarizer, Error>?
+  private let diarizationPipeline = DiarizationPipeline()
 
   private var activeSession: LiveTranscriptionSession?
   private var activeMode: ProcessingMode?
@@ -1166,10 +1226,9 @@ private actor SpeechBridge {
 
   func diarizeAudioFileJSON(audioPath: String, speakerCount: Int) async -> String {
     do {
-      let requestedSpeakerCount = speakerCount > 0 ? speakerCount : nil
-      let payload = try await diarizeRecordedAudio(
+      let payload = try await diarizationPipeline.diarizeAudioFile(
         atPath: audioPath,
-        requestedSpeakerCount: requestedSpeakerCount
+        speakerCount: speakerCount
       )
       return encodeJSON(payload)
     } catch {
@@ -1177,35 +1236,11 @@ private actor SpeechBridge {
         FileDiarizationPayload(
           segments: [],
           speakerCount: 0,
-          pipelineSource: Self.diarizationPipelineSource,
+          pipelineSource: diarizationPipelineSource,
           error: error.localizedDescription
         )
       )
     }
-  }
-
-  private func diarizeRecordedAudio(
-    atPath path: String,
-    requestedSpeakerCount: Int?
-  ) async throws -> FileDiarizationPayload {
-    let url = URL(fileURLWithPath: path)
-    let audio = try AudioFileLoader.load(url: url, targetSampleRate: 16000)
-    let diarizer = try await ensureDiarizerLoaded()
-    let result = diarizer.diarize(audio: audio, sampleRate: 16000, config: .default)
-    let segments = constrainDiarizedSegments(result.segments, requestedSpeakerCount: requestedSpeakerCount)
-
-    return FileDiarizationPayload(
-      segments: segments.map { segment in
-        DiarizationSegmentPayload(
-          speaker: "speaker_\(segment.speakerId)",
-          startSeconds: Double(segment.startTime),
-          endSeconds: Double(segment.endTime)
-        )
-      },
-      speakerCount: Set(segments.map(\.speakerId)).count,
-      pipelineSource: Self.diarizationPipelineSource,
-      error: nil
-    )
   }
 
   private func ensureModelLoaded(_ kind: SpeechModelKind) async throws -> LoadedSpeechModel {
@@ -1225,33 +1260,6 @@ private actor SpeechBridge {
     loadedModels[kind] = loaded
     refreshReadyState(for: kind)
     return loaded
-  }
-
-  private func ensureDiarizerLoaded() async throws -> SortformerDiarizer {
-    if let diarizer = diarizer {
-      return diarizer
-    }
-
-    if let task = diarizerTask {
-      let diarizer = try await task.value
-      self.diarizer = diarizer
-      return diarizer
-    }
-
-    let task = Task<SortformerDiarizer, Error> {
-      try await SortformerDiarizer.fromPretrained()
-    }
-    diarizerTask = task
-
-    do {
-      let diarizer = try await task.value
-      self.diarizer = diarizer
-      diarizerTask = nil
-      return diarizer
-    } catch {
-      diarizerTask = nil
-      throw error
-    }
   }
 
   private func updateDownloadProgress(kind: SpeechModelKind, fraction: Double, status: String) {
