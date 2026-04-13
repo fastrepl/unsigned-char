@@ -40,6 +40,8 @@ swift!(fn _speech_live_transcription_append(
 #[cfg(target_os = "macos")]
 swift!(fn _speech_live_transcription_state() -> SRString);
 #[cfg(target_os = "macos")]
+swift!(fn _speech_live_transcription_request_stop() -> SRString);
+#[cfg(target_os = "macos")]
 swift!(fn _speech_live_transcription_stop() -> SRString);
 
 #[derive(Default)]
@@ -159,6 +161,7 @@ impl TranscriptionManager {
         info!("Requesting speech-swift transcription shutdown");
         if let Some(active) = self.active.as_ref() {
             active.capture.request_stop()?;
+            return speech_live_transcription_request_stop();
         }
 
         speech_live_transcription_state()
@@ -418,6 +421,21 @@ fn speech_live_transcription_state() -> Result<LiveTranscriptionState, String> {
     {
         decode_json(
             unsafe { _speech_live_transcription_state() },
+            "speech-swift transcription state",
+        )
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("speech-swift is only available on macOS.".to_string())
+    }
+}
+
+fn speech_live_transcription_request_stop() -> Result<LiveTranscriptionState, String> {
+    #[cfg(target_os = "macos")]
+    {
+        decode_json(
+            unsafe { _speech_live_transcription_request_stop() },
             "speech-swift transcription state",
         )
     }

@@ -568,6 +568,7 @@ private final class LiveTranscriptionSession {
   private var finalizedEntries: [TranscriptEntryPayload] = []
   private var partialTexts: [TranscriptSource: String] = [:]
   private var running = false
+  private var acceptingInput = false
   private var errorMessage: String?
 
   init(
@@ -601,6 +602,7 @@ private final class LiveTranscriptionSession {
 
     stateLock.lock()
     running = true
+    acceptingInput = true
     errorMessage = nil
     stateLock.unlock()
   }
@@ -625,6 +627,7 @@ private final class LiveTranscriptionSession {
     stateLock.lock()
     let wasRunning = running
     running = false
+    acceptingInput = false
     stateLock.unlock()
 
     let timer = processingTimer
@@ -653,6 +656,7 @@ private final class LiveTranscriptionSession {
   func cancel(removeRecording: Bool) {
     stateLock.lock()
     running = false
+    acceptingInput = false
     stateLock.unlock()
     let timer = processingTimer
     processingTimer = nil
@@ -660,12 +664,19 @@ private final class LiveTranscriptionSession {
     captureWriter.cancel(removeFile: removeRecording)
   }
 
+  func requestStop() {
+    stateLock.lock()
+    acceptingInput = false
+    stateLock.unlock()
+  }
+
   func ingest(mixedSamples: [Float], microphoneSamples: [Float], systemSamples: [Float]) {
     stateLock.lock()
     let isRunning = running
+    let isAcceptingInput = acceptingInput
     stateLock.unlock()
 
-    guard isRunning else {
+    guard isRunning && isAcceptingInput else {
       return
     }
 
@@ -787,6 +798,7 @@ private final class LiveTranscriptionSession {
     stateLock.lock()
     errorMessage = message
     running = false
+    acceptingInput = false
     stateLock.unlock()
 
     let timer = processingTimer
@@ -1101,6 +1113,15 @@ private actor SpeechBridge {
     }
   }
 
+  func requestStopTranscriptionJSON() async -> String {
+    guard let activeSession else {
+      return encodeJSON(TranscriptionPayload.empty)
+    }
+
+    activeSession.requestStop()
+    return encodeJSON(activeSession.snapshot())
+  }
+
   func appendTranscriptionAudio(
     mixedSamplesData: Data,
     microphoneSamplesData: Data,
@@ -1386,6 +1407,11 @@ public func _speech_live_transcription_start(
 @_cdecl("_speech_live_transcription_state")
 public func _speech_live_transcription_state() -> SRString {
   SRString(waitForValue { await SpeechBridge.shared.transcriptionStateJSON() })
+}
+
+@_cdecl("_speech_live_transcription_request_stop")
+public func _speech_live_transcription_request_stop() -> SRString {
+  SRString(waitForValue { await SpeechBridge.shared.requestStopTranscriptionJSON() })
 }
 
 @_cdecl("_speech_live_transcription_append")
