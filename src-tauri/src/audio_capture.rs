@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use fdaf_aec::FdafAec;
 use tracing::error;
 
 const TARGET_SAMPLE_RATE: u32 = 16_000;
@@ -16,6 +17,9 @@ const JOINER_MAX_LAG: usize = 4;
 const JOINER_MAX_QUEUE_SIZE: usize = 30;
 const SESSION_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const SYSTEM_AUDIO_DEVICE_NAME: &str = "unsigned char meeting system audio";
+const AEC_FFT_SIZE: usize = 512;
+const AEC_FRAME_SIZE: usize = AEC_FFT_SIZE / 2;
+const AEC_STEP_SIZE: f32 = 0.2;
 
 pub struct LiveCaptureSession {
     running: Arc<AtomicBool>,
@@ -136,6 +140,7 @@ fn run_capture_loop<F>(
         let _ = startup_tx.send(Ok(()));
 
         let mut joiner = ChunkJoiner::new();
+        let mut aec = AcousticEchoCanceller::new();
         let mut mic_resampler = LinearResampler::new(TARGET_SAMPLE_RATE);
         let mut speaker_resampler = LinearResampler::new(TARGET_SAMPLE_RATE);
         let mut mic_chunks = ChunkAccumulator::new(OUTPUT_CHUNK_SIZE);
@@ -147,6 +152,7 @@ fn run_capture_loop<F>(
                     let delivery = process_audio_chunk(
                         chunk,
                         &mut joiner,
+                        &mut aec,
                         &mut mic_resampler,
                         &mut speaker_resampler,
                         &mut mic_chunks,
@@ -167,7 +173,7 @@ fn run_capture_loop<F>(
         let remaining = finish_joined_audio(&mut joiner, &mut mic_chunks, &mut speaker_chunks);
 
         for (mic, speaker) in remaining {
-            if let Err(message) = on_chunk(mix_audio(&mic, &speaker), mic, speaker) {
+            if let Err(message) = deliver_audio_pair(mic, speaker, &mut aec, &mut on_chunk) {
                 set_error(&error, message);
                 break;
             }
@@ -194,6 +200,7 @@ fn run_capture_loop<F>(
 fn process_audio_chunk<F>(
     chunk: AudioChunk,
     joiner: &mut ChunkJoiner,
+    aec: &mut AcousticEchoCanceller,
     mic_resampler: &mut LinearResampler,
     speaker_resampler: &mut LinearResampler,
     mic_chunks: &mut ChunkAccumulator,
@@ -225,7 +232,7 @@ where
     }
 
     while let Some((mic, speaker)) = joiner.pop_pair() {
-        on_chunk(mix_audio(&mic, &speaker), mic, speaker)?;
+        deliver_audio_pair(mic, speaker, aec, on_chunk)?;
     }
 
     Ok(())
@@ -257,6 +264,74 @@ fn mix_audio(mic: &[f32], speaker: &[f32]) -> Vec<f32> {
     }
 
     mixed
+}
+
+fn deliver_audio_pair<F>(
+    mic: Vec<f32>,
+    speaker: Vec<f32>,
+    aec: &mut AcousticEchoCanceller,
+    on_chunk: &mut F,
+) -> Result<(), String>
+where
+    F: FnMut(Vec<f32>, Vec<f32>, Vec<f32>) -> Result<(), String>,
+{
+    let cleaned_mic = aec.process(&mic, &speaker);
+    on_chunk(mix_audio(&cleaned_mic, &speaker), cleaned_mic, speaker)
+}
+
+struct AcousticEchoCanceller {
+    inner: FdafAec,
+}
+
+impl AcousticEchoCanceller {
+    fn new() -> Self {
+        Self {
+            inner: FdafAec::new(AEC_FFT_SIZE, AEC_STEP_SIZE),
+        }
+    }
+
+    fn process(&mut self, mic: &[f32], speaker: &[f32]) -> Vec<f32> {
+        let max_len = mic.len().max(speaker.len());
+        if max_len == 0 {
+            return Vec::new();
+        }
+
+        let mut cleaned = Vec::with_capacity(max_len);
+        let mut offset = 0;
+
+        while offset < max_len {
+            let frame_len = (max_len - offset).min(AEC_FRAME_SIZE);
+            let mut mic_frame = [0.0_f32; AEC_FRAME_SIZE];
+            let mut speaker_frame = [0.0_f32; AEC_FRAME_SIZE];
+
+            if offset < mic.len() {
+                let mic_end = (offset + frame_len).min(mic.len());
+                let mic_slice = &mic[offset..mic_end];
+                mic_frame[..mic_slice.len()].copy_from_slice(mic_slice);
+            }
+
+            if offset < speaker.len() {
+                let speaker_end = (offset + frame_len).min(speaker.len());
+                let speaker_slice = &speaker[offset..speaker_end];
+                speaker_frame[..speaker_slice.len()].copy_from_slice(speaker_slice);
+            }
+
+            let processed = self.inner.process(&speaker_frame, &mic_frame);
+            if processed
+                .iter()
+                .take(frame_len)
+                .all(|sample| sample.is_finite())
+            {
+                cleaned.extend_from_slice(&processed[..frame_len]);
+            } else {
+                cleaned.extend_from_slice(&mic_frame[..frame_len]);
+            }
+
+            offset += frame_len;
+        }
+
+        cleaned
+    }
 }
 
 fn set_error(error: &Arc<Mutex<Option<String>>>, message: impl Into<String>) {
@@ -435,7 +510,7 @@ impl LinearResampler {
 
 #[cfg(test)]
 mod tests {
-    use super::LinearResampler;
+    use super::{AcousticEchoCanceller, LinearResampler, AEC_FRAME_SIZE};
 
     #[test]
     fn linear_resampler_does_not_drain_past_buffer_when_downsampling() {
@@ -447,6 +522,18 @@ mod tests {
 
         assert!(!first.is_empty());
         assert!(!second.is_empty());
+    }
+
+    #[test]
+    fn acoustic_echo_canceller_preserves_input_length() {
+        let mut aec = AcousticEchoCanceller::new();
+        let mic = vec![0.1_f32; (AEC_FRAME_SIZE * 3) + 17];
+        let speaker = vec![0.05_f32; mic.len()];
+
+        let processed = aec.process(&mic, &speaker);
+
+        assert_eq!(processed.len(), mic.len());
+        assert!(processed.iter().all(|sample| sample.is_finite()));
     }
 }
 

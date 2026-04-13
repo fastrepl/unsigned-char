@@ -30,6 +30,7 @@ tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 cpal = "0.16"
 dasp = "0.11"
+fdaf-aec = "0.1"
 
 [target.'cfg(target_os = "macos")'.build-dependencies]
 swift-rs = { version = "1.0.7", features = ["build"] }
