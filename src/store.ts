@@ -85,10 +85,6 @@ export type DeviceProfile = {
   memoryGb: number;
 };
 
-export function batchModelSupportsRealtime(modelId: SpeechModelId) {
-  return modelId === "parakeetBatch";
-}
-
 export type ManagedModelDownloadStatus = "idle" | "downloading" | "ready" | "error";
 
 export type ManagedModelDownloadState = {
@@ -2345,25 +2341,19 @@ function setHomeScrollTop(homeScrollTop: number) {
   patch({ homeScrollTop });
 }
 
-function setProcessingMode(processingMode: ProcessingMode) {
-  if (!state.modelSettings || state.modelSettings.processingMode === processingMode) {
+function setSelectedModel(modelId: SpeechModelId) {
+  if (!state.modelSettings || state.modelSettings.selectedModelId === modelId) {
     return;
   }
 
-  void saveModelSettings({ processingMode });
-}
-
-function setBatchModel(batchModelId: SpeechModelId) {
-  if (!state.modelSettings || state.modelSettings.batchModelId === batchModelId) {
+  if (modelId === "parakeetStreaming") {
+    void saveModelSettings({ processingMode: "realtime" });
     return;
   }
 
   void saveModelSettings({
-    batchModelId,
-    processingMode:
-      state.modelSettings.processingMode === "realtime" && !batchModelSupportsRealtime(batchModelId)
-        ? "batch"
-        : state.modelSettings.processingMode,
+    processingMode: "batch",
+    batchModelId: modelId,
   });
 }
 
@@ -2603,8 +2593,7 @@ export const appStore = {
   updateMeetingAudioPath,
   updateMeetingRequestedSpeakerCount,
   setHomeScrollTop,
-  setProcessingMode,
-  setBatchModel,
+  setSelectedModel,
   setMainLanguage,
   setTimezone,
   addSpokenLanguage,

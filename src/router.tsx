@@ -17,7 +17,6 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useState,
 } from "react";
@@ -58,7 +57,6 @@ import {
   SelectPopup,
   SelectTrigger,
   ScrollFade,
-  Switch,
   Tooltip,
   TooltipPopup,
   TooltipTrigger,
@@ -68,7 +66,6 @@ import { useScrollFade } from "./hooks/useScrollFade";
 import {
   LANGUAGE_OPTIONS,
   appStore,
-  batchModelSupportsRealtime,
   currentSetupBannerContent,
   formatClockSeconds,
   formatDateTime,
@@ -265,93 +262,6 @@ function SettingsStatusDot({
         )}
       />
     </span>
-  );
-}
-
-function batchModelPickerLabel(modelId: string, fallbackLabel: string) {
-  return modelId === "parakeetBatch" ? "Parakeet" : fallbackLabel;
-}
-
-function batchModelPickerBadges(modelId: string) {
-  if (modelId === "parakeetBatch") {
-    return [
-      { label: "Realtime", variant: "info" as const },
-      { label: "Batch", variant: "outline" as const },
-    ];
-  }
-
-  return [{ label: "Batch only", variant: "outline" as const }];
-}
-
-function ProcessingModeToggle({
-  value,
-  onChange,
-  disabled = false,
-  supported = true,
-}: {
-  value: "realtime" | "batch";
-  onChange: (value: "realtime" | "batch") => void;
-  disabled?: boolean;
-  supported?: boolean;
-}) {
-  const realtimeEnabled = supported && value === "realtime";
-  const interactionDisabled = disabled || !supported;
-  const unsupportedTooltip = "This model is only available for batch processing.";
-  const switchId = useId();
-  const descriptionId = `${switchId}-description`;
-  const description = !supported
-    ? "Processed after the meeting ends."
-    : realtimeEnabled
-      ? "Streaming in real time while you record."
-      : "Processed after the meeting ends.";
-
-  const switchControl = (
-    <Switch
-      id={switchId}
-      checked={realtimeEnabled}
-      aria-describedby={descriptionId}
-      aria-label="Realtime"
-      disabled={interactionDisabled}
-      onCheckedChange={(checked) => {
-        onChange(checked ? "realtime" : "batch");
-      }}
-      className={cn(!supported && "bg-zinc-200 data-[checked]:bg-zinc-200")}
-    />
-  );
-
-  const switchElement = !supported ? (
-    <Tooltip>
-      <TooltipTrigger
-        render={<span className="inline-flex shrink-0 cursor-not-allowed pt-1" />}
-        tabIndex={0}
-        aria-label={unsupportedTooltip}
-      >
-        {switchControl}
-      </TooltipTrigger>
-      <TooltipPopup side="top" align="end">
-        {unsupportedTooltip}
-      </TooltipPopup>
-    </Tooltip>
-  ) : (
-    <div className="inline-flex shrink-0 pt-1">{switchControl}</div>
-  );
-
-  return (
-    <div className={cn("flex items-start justify-between gap-4", interactionDisabled && "opacity-60")}>
-      <div className="min-w-0">
-        <label
-          htmlFor={switchId}
-          className={cn("block text-sm font-semibold text-zinc-950", interactionDisabled && "text-zinc-500")}
-        >
-          Realtime
-        </label>
-        <p id={descriptionId} className="mt-1 text-sm leading-6 text-zinc-600">
-          {description}
-        </p>
-      </div>
-
-      {switchElement}
-    </div>
   );
 }
 
@@ -662,15 +572,17 @@ const summaryProviderLogoClassNames: Partial<Record<SummaryProviderId, string>> 
   openrouter: "size-6",
 };
 
-const batchModelLogos: Partial<Record<SpeechModelId, string>> = {
+const speechModelLogos: Partial<Record<SpeechModelId, string>> = {
   omnilingual: metaLogo,
+  parakeetStreaming: nvidiaLogo,
   parakeetBatch: nvidiaLogo,
   qwen3Large: qwenLogo,
   qwen3Small: qwenLogo,
 };
 
-const batchModelLogoClassNames: Partial<Record<SpeechModelId, string>> = {
+const speechModelLogoClassNames: Partial<Record<SpeechModelId, string>> = {
   omnilingual: "size-6",
+  parakeetStreaming: "size-6",
   parakeetBatch: "size-6",
   qwen3Large: "size-6",
   qwen3Small: "size-6",
@@ -1630,26 +1542,31 @@ function SettingsScreen() {
   const selectedModel = modelSettings.availableModels.find(
     (option) => option.id === modelSettings.selectedModelId,
   );
-  const batchModelOptions = modelSettings.availableModels
-    .filter((option) => option.processingMode === "batch")
+  const modelOptions = modelSettings.availableModels
     .map((option): SearchableOption => ({
       value: option.id,
-      label: batchModelPickerLabel(option.id, option.label),
+      label: option.label,
       detail: option.sizeLabel,
       icon: option.id === "omnilingual" ? "omnilingual" : undefined,
-      logoSrc: batchModelLogos[option.id],
-      logoClassName: batchModelLogoClassNames[option.id],
-      badges: batchModelPickerBadges(option.id),
+      logoSrc: speechModelLogos[option.id],
+      logoClassName: speechModelLogoClassNames[option.id],
+      badges: [
+        {
+          label: option.processingMode === "realtime" ? "Realtime" : "Batch",
+          variant: option.processingMode === "realtime" ? "info" : "outline",
+        },
+      ],
       searchTerms:
-        option.id === "parakeetBatch"
-          ? [option.label, "Parakeet Streaming", "streaming", "realtime", option.languagesLabel, "NVIDIA"]
-          : option.id === "omnilingual"
-            ? [option.languagesLabel, "Meta", "facebookresearch", "Omnilingual ASR"]
-          : option.id.startsWith("qwen")
-            ? [option.languagesLabel, "Qwen"]
-            : [option.languagesLabel],
+        option.id === "parakeetStreaming"
+          ? [option.label, "Parakeet Realtime", "streaming", "realtime", option.languagesLabel, "NVIDIA"]
+        : option.id === "parakeetBatch"
+          ? [option.label, "Parakeet Batch", "batch", option.languagesLabel, "NVIDIA"]
+        : option.id === "omnilingual"
+          ? [option.languagesLabel, "Meta", "facebookresearch", "Omnilingual ASR"]
+        : option.id.startsWith("qwen")
+          ? [option.languagesLabel, "Qwen"]
+          : [option.languagesLabel],
     }));
-  const selectedBatchSupportsRealtime = batchModelSupportsRealtime(modelSettings.batchModelId);
   const selectedSummaryProvider = getSummaryProviderDefinition(snapshot.summaryDraft.provider);
   const summaryStatusLabel = !snapshot.summarySettings.provider
     ? "off"
@@ -1770,11 +1687,11 @@ function SettingsScreen() {
                     <div className="flex items-start gap-3">
                       <SettingsSelect
                         ariaLabel="Model"
-                        value={snapshot.modelSettings.batchModelId}
+                        value={snapshot.modelSettings.selectedModelId}
                         onChange={(nextValue) => {
-                          appStore.setBatchModel(nextValue as typeof snapshot.modelSettings.batchModelId);
+                          appStore.setSelectedModel(nextValue as SpeechModelId);
                         }}
-                        options={batchModelOptions}
+                        options={modelOptions}
                         placeholder="Select model"
                         disabled={snapshot.modelBusy || downloadStatus === "downloading"}
                         className="min-w-0 flex-1"
@@ -1791,13 +1708,6 @@ function SettingsScreen() {
                     </p>
                   </div>
                 </div>
-
-                <ProcessingModeToggle
-                  value={snapshot.modelSettings.processingMode}
-                  onChange={appStore.setProcessingMode}
-                  disabled={snapshot.modelBusy || downloadStatus === "downloading"}
-                  supported={selectedBatchSupportsRealtime}
-                />
 
               </CardPanel>
             </Card>
