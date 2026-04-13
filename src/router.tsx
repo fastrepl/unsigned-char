@@ -711,7 +711,7 @@ function SearchableSelect({
 
   return (
     <div
-      className={cn("relative", className)}
+      className={cn("relative w-full min-w-0", className)}
       onBlurCapture={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return;
@@ -728,7 +728,7 @@ function SearchableSelect({
         aria-expanded={open}
         aria-label={ariaLabel}
         disabled={disabled}
-        className="min-h-11 w-full justify-between px-4 text-left font-normal"
+        className="flex min-h-11 w-full min-w-0 max-w-full justify-between px-4 text-left font-normal"
         onClick={() => {
           if (disabled) {
             return;
@@ -739,9 +739,9 @@ function SearchableSelect({
           setActiveIndex(0);
         }}
       >
-        <span className="flex min-w-0 items-center gap-3">
+        <span className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           <SearchableOptionPrefix icon={selectedOption?.icon} logoSrc={selectedOption?.logoSrc} />
-          <span className={cn("truncate", !selectedOption && "text-zinc-500")}>
+          <span className={cn("min-w-0 flex-1 truncate", !selectedOption && "text-zinc-500")}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
           {selectedOption?.badges?.length ? (
@@ -886,7 +886,7 @@ function SpokenLanguagesCombobox({
 
   return (
     <div
-      className="relative"
+      className="relative w-full min-w-0"
       onBlurCapture={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return;
@@ -897,7 +897,7 @@ function SpokenLanguagesCombobox({
     >
       <div
         className={cn(
-          "flex min-h-12 flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[color:var(--border-strong)] bg-[color:var(--card)] px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.85)]",
+          "flex min-h-12 w-full min-w-0 flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[color:var(--border-strong)] bg-[color:var(--card)] px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.85)]",
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
@@ -966,7 +966,7 @@ function SpokenLanguagesCombobox({
             }
           }}
           placeholder={placeholder}
-          className="min-w-32 flex-1 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-500"
+          className="min-w-0 flex-1 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-500"
         />
       </div>
 
