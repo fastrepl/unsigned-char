@@ -1574,16 +1574,6 @@ function SettingsScreen() {
       ? "ready"
       : "needs setup";
   const summaryStatusActive = snapshot.summarySettings.ready;
-  const summarySettingsDirty =
-    snapshot.summaryDraft.provider !== snapshot.summarySettings.provider ||
-    snapshot.summaryDraft.model.trim() !== snapshot.summarySettings.model.trim() ||
-    snapshot.summaryDraft.baseUrl.trim() !== snapshot.summarySettings.baseUrl.trim() ||
-    snapshot.summaryDraft.apiKeyDirty;
-  const summaryFooterText = snapshot.summaryNote
-    ? "Could not save changes."
-    : snapshot.summaryBusy || summarySettingsDirty
-      ? "Saving changes..."
-      : snapshot.summarySettings.status;
   const apiKeyPlaceholder =
     snapshot.summaryDraft.apiKeyPresent && !snapshot.summaryDraft.apiKeyDirty
       ? "API key saved"
@@ -1805,9 +1795,6 @@ function SettingsScreen() {
                 ) : null}
 
               </CardPanel>
-              <CardFooter>
-                <p className="text-sm text-zinc-500">{summaryFooterText}</p>
-              </CardFooter>
             </Card>
 
             {snapshot.generalNote ? (
