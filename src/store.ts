@@ -1949,7 +1949,7 @@ async function requestPermissionForMeeting(permission: PermissionKind) {
     throw new Error(permissionDeniedMessage(permission));
   }
 
-  if (nextStatus !== "authorized") {
+  if (nextStatus !== "authorized" && permission === "microphone") {
     throw new Error(permissionPendingMessage(permission));
   }
 }
