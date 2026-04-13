@@ -697,7 +697,12 @@ function SpokenLanguagesCombobox({
 
 function RootLayout() {
   return (
-    <div className="relative isolate min-h-screen w-full text-zinc-900">
+    <div
+      className={cn(
+        "relative isolate min-h-screen w-full text-zinc-900",
+        isSettingsWindow && "bg-[linear-gradient(180deg,#fcfcfa_0%,var(--background)_48%,#f2f4f8_100%)]",
+      )}
+    >
       {isSettingsWindow ? (
         <WindowDragRegion className="absolute inset-x-0 top-0 z-20 h-10 w-full" />
       ) : (
@@ -1297,9 +1302,7 @@ function SettingsScreen() {
     snapshot.permissionNote || snapshot.generalNote || snapshot.summaryNote;
   const settingsContentWidthClass = isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]";
   const settingsShellHeightClass = isSettingsWindow ? "h-screen" : windowShellHeightClass;
-  const settingsContentInsetClass = isSettingsWindow
-    ? "px-5 pt-[calc(2.5rem+1.25rem)] pb-6"
-    : "px-5 pt-5 pb-6";
+  const settingsContentInsetClass = "px-5 pt-5 pb-6";
 
   if (!snapshot.generalSettings || !snapshot.summarySettings || !snapshot.modelSettings) {
     return (
