@@ -1459,17 +1459,11 @@ function SettingsScreen() {
           <div className={cn("mx-auto flex flex-col gap-6", settingsContentWidthClass, settingsContentInsetClass)}>
             <Card id={AI_SUMMARIES_SETTINGS_SECTION_ID} className="overflow-visible">
               <CardHeader>
-                <CardTitle>Preferences</CardTitle>
-                <CardDescription>Language and timeline defaults for the local app.</CardDescription>
+                <CardTitle>General</CardTitle>
               </CardHeader>
               <CardPanel className="grid gap-6 pt-0">
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),180px] md:items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Main language</p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      Language for summaries, chats, and AI-generated responses
-                    </p>
-                  </div>
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-zinc-950">Main language</p>
                   <SearchableSelect
                     ariaLabel="Main language"
                     value={snapshot.generalDraft.mainLanguage}
@@ -1481,13 +1475,8 @@ function SettingsScreen() {
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Timezone</p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      Override the timezone used for the sidebar timeline
-                    </p>
-                  </div>
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-zinc-950">Timezone</p>
                   <SearchableSelect
                     ariaLabel="Timezone"
                     value={snapshot.generalDraft.timezone || systemTimezone}
@@ -1501,48 +1490,29 @@ function SettingsScreen() {
                   />
                 </div>
 
-                <div>
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Spoken languages</p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      Add other languages you use other than the main language
-                    </p>
-                  </div>
-                  <div className="mt-4">
-                    <SpokenLanguagesCombobox
-                      mainLanguage={snapshot.generalDraft.mainLanguage}
-                      value={snapshot.generalDraft.spokenLanguages}
-                      disabled={snapshot.generalBusy}
-                      onAdd={appStore.addSpokenLanguage}
-                      onRemove={appStore.removeSpokenLanguage}
-                    />
-                  </div>
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-zinc-950">Spoken languages</p>
+                  <SpokenLanguagesCombobox
+                    mainLanguage={snapshot.generalDraft.mainLanguage}
+                    value={snapshot.generalDraft.spokenLanguages}
+                    disabled={snapshot.generalBusy}
+                    onAdd={appStore.addSpokenLanguage}
+                    onRemove={appStore.removeSpokenLanguage}
+                  />
                 </div>
               </CardPanel>
             </Card>
 
             <Card className="overflow-visible">
               <CardHeader className="flex-row items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <CardTitle>Transcription model</CardTitle>
-                  <CardDescription>
-                    Switch between live captions and post-meeting batch transcription, then choose the
-                    local model that best fits this Mac.
-                  </CardDescription>
-                </div>
+                <CardTitle>Transcription model</CardTitle>
                 <CardAction>
                   <StatusBadge tone={modelStatusTone}>{modelStatusLabel}</StatusBadge>
                 </CardAction>
               </CardHeader>
               <CardPanel className="grid gap-6 pt-0">
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Processing mode</p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      Realtime shows live captions while you record. Batch waits until the meeting ends,
-                      then transcribes the saved audio.
-                    </p>
-                  </div>
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-zinc-950">Processing mode</p>
                   <SearchableSelect
                     ariaLabel="Processing mode"
                     value={snapshot.modelSettings.processingMode}
@@ -1556,14 +1526,8 @@ function SettingsScreen() {
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Batch model</p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      Stored even while realtime mode is active, so you can pre-pick the model that runs
-                      after a meeting ends.
-                    </p>
-                  </div>
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-zinc-950">Batch model</p>
                   <SearchableSelect
                     ariaLabel="Batch model"
                     value={snapshot.modelSettings.batchModelId}
@@ -1655,24 +1619,14 @@ function SettingsScreen() {
 
             <Card className="overflow-visible">
               <CardHeader className="flex-row items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <CardTitle>AI summaries</CardTitle>
-                  <CardDescription>
-                    Connect an LLM provider to turn transcripts into local meeting summaries.
-                  </CardDescription>
-                </div>
+                <CardTitle>AI summaries</CardTitle>
                 <CardAction>
                   <StatusBadge tone={summaryStatusTone}>{summaryStatusLabel}</StatusBadge>
                 </CardAction>
               </CardHeader>
               <CardPanel className="grid gap-6 pt-0">
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Provider</p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      Pick the model provider used when you generate a summary from a transcript.
-                    </p>
-                  </div>
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-zinc-950">Provider</p>
                   <SearchableSelect
                     ariaLabel="Summary provider"
                     value={snapshot.summaryDraft.provider}
@@ -1684,13 +1638,8 @@ function SettingsScreen() {
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-950">Model</p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      Enter the exact chat model identifier for the selected provider.
-                    </p>
-                  </div>
+                <div className="grid gap-3">
+                  <p className="text-sm font-semibold text-zinc-950">Model</p>
                   <Input
                     value={snapshot.summaryDraft.model}
                     onChange={(event) => {
@@ -1703,12 +1652,8 @@ function SettingsScreen() {
 
                 <div>
                   <p className="text-sm font-semibold text-zinc-950">Base URL</p>
-                  <p className="mt-1 text-sm leading-6 text-zinc-600">
-                    Leave this blank to use the provider default. Add one for local servers or custom
-                    gateways.
-                  </p>
                   <Input
-                    className="mt-4"
+                    className="mt-3"
                     value={snapshot.summaryDraft.baseUrl}
                     onChange={(event) => {
                       appStore.setSummaryBaseUrl(event.target.value);
@@ -1720,12 +1665,7 @@ function SettingsScreen() {
 
                 <div>
                   <p className="text-sm font-semibold text-zinc-950">API key</p>
-                  <p className="mt-1 text-sm leading-6 text-zinc-600">
-                    {selectedSummaryProvider?.requiresApiKey
-                      ? "Required for this provider. The saved key stays in the app config on this device."
-                      : "Optional. Leave it blank for providers that do not need authentication."}
-                  </p>
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                     <Input
                       className="flex-1"
                       type="password"
