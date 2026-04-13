@@ -726,13 +726,13 @@ private final class LiveTranscriptionSession {
 
 private actor SpeechBridge {
   static let shared = SpeechBridge()
-  private static let diarizationPipelineSource = "speech-swift / pyannote"
+  private static let diarizationPipelineSource = "speech-swift / sortformer"
 
   private var loadedModels: [SpeechModelKind: LoadedSpeechModel] = [:]
   private var modelTasks: [SpeechModelKind: Task<LoadedSpeechModel, Error>] = [:]
   private var downloadStates: [SpeechModelKind: ModelDownloadPayload] = [:]
-  private var diarizationPipeline: DiarizationPipeline?
-  private var diarizationPipelineTask: Task<DiarizationPipeline, Error>?
+  private var diarizer: SortformerDiarizer?
+  private var diarizerTask: Task<SortformerDiarizer, Error>?
 
   private var activeSession: LiveTranscriptionSession?
   private var activeMode: ProcessingMode?
@@ -1072,8 +1072,8 @@ private actor SpeechBridge {
   private func diarizeRecordedAudio(atPath path: String) async throws -> FileDiarizationPayload {
     let url = URL(fileURLWithPath: path)
     let audio = try AudioFileLoader.load(url: url, targetSampleRate: 16000)
-    let pipeline = try await ensureDiarizationPipelineLoaded()
-    let result = pipeline.diarize(audio: audio, sampleRate: 16000, config: .default)
+    let diarizer = try await ensureDiarizerLoaded()
+    let result = diarizer.diarize(audio: audio, sampleRate: 16000, config: .default)
 
     return FileDiarizationPayload(
       segments: result.segments.map { segment in
@@ -1108,29 +1108,29 @@ private actor SpeechBridge {
     return loaded
   }
 
-  private func ensureDiarizationPipelineLoaded() async throws -> DiarizationPipeline {
-    if let pipeline = diarizationPipeline {
-      return pipeline
+  private func ensureDiarizerLoaded() async throws -> SortformerDiarizer {
+    if let diarizer = diarizer {
+      return diarizer
     }
 
-    if let task = diarizationPipelineTask {
-      let pipeline = try await task.value
-      diarizationPipeline = pipeline
-      return pipeline
+    if let task = diarizerTask {
+      let diarizer = try await task.value
+      self.diarizer = diarizer
+      return diarizer
     }
 
-    let task = Task<DiarizationPipeline, Error> {
-      try await DiarizationPipeline.fromPretrained()
+    let task = Task<SortformerDiarizer, Error> {
+      try await SortformerDiarizer.fromPretrained()
     }
-    diarizationPipelineTask = task
+    diarizerTask = task
 
     do {
-      let pipeline = try await task.value
-      diarizationPipeline = pipeline
-      diarizationPipelineTask = nil
-      return pipeline
+      let diarizer = try await task.value
+      self.diarizer = diarizer
+      diarizerTask = nil
+      return diarizer
     } catch {
-      diarizationPipelineTask = nil
+      diarizerTask = nil
       throw error
     }
   }

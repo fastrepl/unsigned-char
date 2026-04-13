@@ -44,7 +44,7 @@ const OPEN_SETTINGS_MENU_ID: &str = "open-settings";
 const SETTINGS_WINDOW_LABEL: &str = "settings";
 const CHAR_WEBSITE_URL: &str = "https://char.com";
 const DIARIZATION_PROVIDER_LABEL: &str = "speech-swift";
-const DIARIZATION_PIPELINE_LABEL: &str = "built-in native diarization";
+const DIARIZATION_PIPELINE_LABEL: &str = "sortformer coreml diarization";
 
 #[derive(Default)]
 struct AppState {
@@ -1291,7 +1291,7 @@ fn build_diarization_settings_state(
     let enabled = true;
     let ready = enabled;
     let status = if enabled {
-        "Built-in speech-swift diarization runs locally after each meeting and downloads native models on first use.".to_string()
+        "Built-in Sortformer diarization runs locally after each meeting and downloads the native CoreML model on first use.".to_string()
     } else {
         "Speaker diarization is off.".to_string()
     };
