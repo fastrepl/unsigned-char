@@ -420,13 +420,33 @@ impl LinearResampler {
             self.position += ratio;
         }
 
-        let consumed = self.position.floor() as usize;
+        let consumed = self
+            .position
+            .floor()
+            .min(self.buffer.len().saturating_sub(1) as f64) as usize;
         if consumed > 0 {
             self.buffer.drain(..consumed);
             self.position -= consumed as f64;
         }
 
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LinearResampler;
+
+    #[test]
+    fn linear_resampler_does_not_drain_past_buffer_when_downsampling() {
+        let mut resampler = LinearResampler::new(16_000);
+        let samples = vec![0.0_f32; 512];
+
+        let first = resampler.process(&samples, 48_000);
+        let second = resampler.process(&samples, 48_000);
+
+        assert!(!first.is_empty());
+        assert!(!second.is_empty());
     }
 }
 
