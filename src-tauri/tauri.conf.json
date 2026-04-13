@@ -16,7 +16,9 @@
       {
         "label": "main",
         "title": "unsigned {char}",
-        "width": 460,
+        "width": 420,
+        "minWidth": 420,
+        "maxWidth": 420,
         "height": 640,
         "resizable": true,
         "titleBarStyle": "Overlay",
