@@ -1381,7 +1381,7 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
     return {
       kicker: "Downloading model",
       title: "Transcription model setup in progress",
-      copy: `unsigned {char} is downloading ${selectedModelLabel} and storing it locally on this Mac.`,
+      copy: `unsigned Char is downloading ${selectedModelLabel} and storing it locally on this Mac.`,
       detail: progress,
       actionLabel: null,
       secondaryActionLabel: null,
@@ -1910,7 +1910,7 @@ function permissionHostHint(permission: PermissionKind) {
     return "";
   }
 
-  return ` If no ${permissionLabel(permission).toLowerCase()} prompt appears, macOS may be treating the app that launched \`bun desktop:dev\` as the permission host instead of unsigned char. Check Warp, Ghostty, or Terminal, or run \`bun desktop\`.`;
+  return ` If no ${permissionLabel(permission).toLowerCase()} prompt appears, macOS may be treating the app that launched \`bun desktop:dev\` as the permission host instead of unsigned Char. Check Warp, Ghostty, or Terminal, or run \`bun desktop\`.`;
 }
 
 function permissionDeniedMessage(permission: PermissionKind) {

@@ -1,8 +1,8 @@
-![unsigned {char}](.github/assets/uchar.jpg)
+![unsigned Char](.github/assets/uchar.jpg)
 
-# unsigned {char}
+# unsigned Char
 
-`unsigned {char}` is a local-first Tauri desktop app for Apple Silicon Macs. It records meetings, transcribes them locally, saves transcript exports as Markdown, and can generate summaries with the provider you already use.
+`unsigned Char` is a local-first Tauri desktop app for Apple Silicon Macs. It records meetings, transcribes them locally, saves transcript exports as Markdown, and can generate summaries with the provider you already use.
 
 If you want the upstream inspiration, use [Char](https://github.com/fastrepl/char).
 
@@ -29,18 +29,18 @@ bun install
 bun desktop
 ```
 
-`bun desktop` builds and opens the bundled debug app so macOS privacy prompts are attached to the real `unsigned char.app` bundle. If you want the faster hot-reload loop, use `bun desktop:dev`, but microphone and system-audio permissions may not register there.
+`bun desktop` builds and opens the bundled debug app so macOS privacy prompts are attached to the real `unsigned Char.app` bundle. If you want the faster hot-reload loop, use `bun desktop:dev`, but microphone and system-audio permissions may not register there.
 
 ## CLI
 
 Bundled app builds include `uchar` inside the app bundle:
 
 ```bash
-/Applications/unsigned\ char.app/Contents/MacOS/uchar
+/Applications/unsigned\ Char.app/Contents/MacOS/uchar
 ```
 
 If you want `uchar` on your `PATH`:
 
 ```bash
-ln -sf "/Applications/unsigned char.app/Contents/MacOS/uchar" /opt/homebrew/bin/uchar
+ln -sf "/Applications/unsigned Char.app/Contents/MacOS/uchar" /opt/homebrew/bin/uchar
 ```

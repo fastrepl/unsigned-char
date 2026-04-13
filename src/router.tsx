@@ -32,7 +32,6 @@ import {
 } from "react";
 
 import anthropicLogo from "./assets/provider-icons/anthropic.png";
-import brandWordmark from "./assets/brand-wordmark.svg";
 import googleLogo from "./assets/provider-icons/google.png";
 import lmStudioLogo from "./assets/provider-icons/lmstudio.png";
 import metaLogo from "./assets/provider-icons/meta.png";
@@ -77,8 +76,6 @@ import {
   LANGUAGE_OPTIONS,
   appStore,
   currentSetupBannerContent,
-  formatClockSeconds,
-  formatDateTime,
   getMeetingTranscriptEntries,
   getMeetingSpeakerLabel,
   getTimezoneOptions,
@@ -133,7 +130,16 @@ function IconStopSquare({ className }: { className?: string }) {
 }
 
 function BrandWordmark({ className }: { className?: string }) {
-  return <img src={brandWordmark} alt="unsigned {char}" className={cn("block h-9 w-auto", className)} />;
+  return (
+    <span
+      className={cn(
+        "block text-[1.95rem] font-semibold leading-none tracking-[-0.08em] text-slate-950",
+        className,
+      )}
+    >
+      unsigned Char
+    </span>
+  );
 }
 
 const AI_SUMMARIES_SETTINGS_SECTION = "ai-summaries";
@@ -275,14 +281,12 @@ function getTranscriptEntryMeta(meeting: Meeting, entry: TranscriptEntry, index:
     return {
       speakerId: segment.speaker,
       speakerLabel: getMeetingSpeakerLabel(meeting, segment.speaker),
-      timestampLabel: formatClockSeconds(segment.startSeconds),
     };
   }
 
   return {
     speakerId: null,
     speakerLabel: formatTranscriptSourceLabel(entry.source),
-    timestampLabel: index === 0 ? formatClockSeconds(0) : null,
   };
 }
 
@@ -1158,10 +1162,7 @@ function HomeScreen() {
                         />
                         <CardPanel className="p-4">
                           <div className="flex min-w-0 items-center justify-between gap-4">
-                            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                              <p className="min-w-0 truncate text-sm text-zinc-600">
-                                {formatDateTime(meeting.createdAt)}
-                              </p>
+                            <div className="flex min-w-0 flex-1 flex-col">
                               <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-zinc-950">
                                 {meeting.title}
                               </h2>
@@ -1430,6 +1431,9 @@ function MeetingScreen() {
       : meeting.status === "live" && snapshot.modelSettings?.processingMode === "batch"
       ? "Transcript will be generated after you stop the meeting."
       : "Transcript will appear here.";
+  const summaryMeta = [meeting.summaryProviderLabel, meeting.summaryModel]
+    .filter((value): value is string => Boolean(value))
+    .join(" · ");
 
   return (
     <section className={cn("mx-auto flex max-w-[760px] flex-col gap-5", windowShellHeightClass)}>
@@ -1449,11 +1453,7 @@ function MeetingScreen() {
             </Button>
           </div>
 
-          <div className="min-w-0">
-            <p className="truncate text-center text-sm text-zinc-600">
-              {formatDateTime(meeting.createdAt)}
-            </p>
-          </div>
+          <div className="min-w-0" />
 
           <div data-window-drag="false">
             <Button
@@ -1657,17 +1657,11 @@ function MeetingScreen() {
                       {meeting.summary}
                     </div>
                   </CardPanel>
-                  <CardFooter className="justify-start">
-                    <div className="text-xs leading-5 text-zinc-500">
-                      {meeting.summaryUpdatedAt ? (
-                        <span>
-                          {meeting.summaryProviderLabel ? `${meeting.summaryProviderLabel}` : "Summary"} ·{" "}
-                          {meeting.summaryModel ?? "model"} · Updated{" "}
-                          {formatDateTime(meeting.summaryUpdatedAt)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </CardFooter>
+                  {summaryMeta ? (
+                    <CardFooter className="justify-start">
+                      <div className="text-xs leading-5 text-zinc-500">{summaryMeta}</div>
+                    </CardFooter>
+                  ) : null}
                 </Card>
               ) : null}
 
@@ -1680,18 +1674,14 @@ function MeetingScreen() {
               ) : (
                 <section className="space-y-5 pb-2">
                   {transcriptEntries.map((entry, index) => {
-                    const { speakerId, speakerLabel, timestampLabel } = getTranscriptEntryMeta(
-                      meeting,
-                      entry,
-                      index,
-                    );
+                    const { speakerId, speakerLabel } = getTranscriptEntryMeta(meeting, entry, index);
 
                     return (
                       <article
                         key={`${meeting.id}-${index}-${entry.source}-${entry.text.slice(0, 12)}`}
                         className="space-y-2 border-b border-[color:var(--border)] pb-5 last:border-b-0 last:pb-0"
                       >
-                        <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                        <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
                           <div className="min-w-0">
                             {speakerId ? (
                               <SpeakerLabelField
@@ -1705,9 +1695,6 @@ function MeetingScreen() {
                               </span>
                             )}
                           </div>
-                          {timestampLabel ? (
-                            <span className="shrink-0 text-zinc-400">{timestampLabel}</span>
-                          ) : null}
                         </div>
                         <p className="whitespace-pre-wrap text-[15px] leading-8 text-zinc-800">
                           {entry.text}

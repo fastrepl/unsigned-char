@@ -4,7 +4,7 @@ alwaysApply: true
 
 ## Definition
 
-- The app's name is unsigned char.
+- The app's name is unsigned Char.
 - It is a local-first desktop app built with Tauri and TypeScript.
 
 ## UI System

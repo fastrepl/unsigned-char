@@ -1,11 +1,4 @@
-use std::{
-    env,
-    fs,
-    path::PathBuf,
-    process::Command,
-    thread,
-    time::Duration,
-};
+use std::{env, fs, path::PathBuf, process::Command, thread, time::Duration};
 
 use serde::Serialize;
 
@@ -20,8 +13,8 @@ use crate::{
     },
 };
 
-const APP_DISPLAY_NAME: &str = "unsigned {char}";
-const APP_OPEN_NAMES: [&str; 2] = ["unsigned char", "unsigned {char}"];
+const APP_DISPLAY_NAME: &str = "unsigned Char";
+const APP_OPEN_NAMES: [&str; 3] = ["unsigned Char", "unsigned char", "unsigned {char}"];
 const MODEL_DOWNLOAD_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 pub fn try_run_from_env() -> Option<i32> {
@@ -122,10 +115,7 @@ fn run_models_list(args: &[String]) -> Result<(), String> {
             for model in &models {
                 println!(
                     "{:<20} {:<12} {:<9} {}",
-                    model.name,
-                    model.status,
-                    model.processing_mode,
-                    model.label
+                    model.name, model.status, model.processing_mode, model.label
                 );
                 println!("  path: {}", model.path);
                 println!("  size: {} | languages: {}", model.size, model.languages);
@@ -144,7 +134,10 @@ fn run_models_list(args: &[String]) -> Result<(), String> {
 }
 
 fn run_models_download(args: &[String]) -> Result<(), String> {
-    if matches!(args.first().map(String::as_str), Some("--help" | "-h" | "help")) {
+    if matches!(
+        args.first().map(String::as_str),
+        Some("--help" | "-h" | "help")
+    ) {
         print_models_download_help();
         return Ok(());
     }
@@ -161,7 +154,11 @@ fn run_models_download(args: &[String]) -> Result<(), String> {
     let target_dir = managed_model_path(model_id.as_str())?;
 
     if model_path_is_ready(model_id, &target_dir) {
-        println!("{} is already available at {}", spec.label, target_dir.display());
+        println!(
+            "{} is already available at {}",
+            spec.label,
+            target_dir.display()
+        );
         return Ok(());
     }
 
@@ -200,7 +197,10 @@ fn run_models_download(args: &[String]) -> Result<(), String> {
 }
 
 fn run_models_delete(args: &[String]) -> Result<(), String> {
-    if matches!(args.first().map(String::as_str), Some("--help" | "-h" | "help")) {
+    if matches!(
+        args.first().map(String::as_str),
+        Some("--help" | "-h" | "help")
+    ) {
         print_models_delete_help();
         return Ok(());
     }
@@ -223,8 +223,8 @@ fn run_models_delete(args: &[String]) -> Result<(), String> {
         }
     }
 
-    let model_name = model_name
-        .ok_or_else(|| "`uchar models delete` requires a model name.".to_string())?;
+    let model_name =
+        model_name.ok_or_else(|| "`uchar models delete` requires a model name.".to_string())?;
     let model_id = parse_model_name(model_name)?;
     let spec = speech_model_spec(model_id);
     let target_dir = managed_model_path(model_id.as_str())?;
@@ -351,7 +351,10 @@ fn run_transcribe(args: &[String]) -> Result<(), String> {
     };
 
     if let Some(output_path) = output {
-        if let Some(parent) = output_path.parent().filter(|path| !path.as_os_str().is_empty()) {
+        if let Some(parent) = output_path
+            .parent()
+            .filter(|path| !path.as_os_str().is_empty())
+        {
             fs::create_dir_all(parent).map_err(|error| {
                 format!(
                     "Failed to create the output directory {}: {error}",
@@ -480,15 +483,11 @@ fn print_models_list_help() {
 }
 
 fn print_models_download_help() {
-    println!(
-        "uchar models download\n\nUsage:\n  uchar models download <name>\n"
-    );
+    println!("uchar models download\n\nUsage:\n  uchar models download <name>\n");
 }
 
 fn print_models_delete_help() {
-    println!(
-        "uchar models delete\n\nUsage:\n  uchar models delete [--force] <name>\n"
-    );
+    println!("uchar models delete\n\nUsage:\n  uchar models delete [--force] <name>\n");
 }
 
 fn print_transcribe_help() {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "unsigned char",
+  "productName": "unsigned Char",
   "version": "0.0.2",
   "identifier": "com.johnjeong.unsignedchar",
   "build": {
@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "unsigned {char}",
+        "title": "unsigned Char",
         "width": 420,
         "minWidth": 420,
         "maxWidth": 420,

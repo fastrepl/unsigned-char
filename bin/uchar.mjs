@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const APP_NAMES = ["unsigned {char}", "unsigned char"];
+const APP_NAMES = ["unsigned Char", "unsigned char", "unsigned {char}"];
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION = readVersion();
 const APP_PATHS = APP_NAMES.flatMap((appName) => [
@@ -17,9 +17,9 @@ const APP_PATHS = APP_NAMES.flatMap((appName) => [
 
 const HELP = `uchar ${VERSION}
 
-CLI for unsigned {char}.
+CLI for unsigned Char.
 
-This wrapper forwards to the bundled app CLI when unsigned {char} is installed.
+This wrapper forwards to the bundled app CLI when unsigned Char is installed.
 
 Usage:
   uchar
@@ -34,11 +34,11 @@ main(process.argv.slice(2));
 
 function main(args) {
   if (process.platform !== "darwin") {
-    fail("unsigned {char} currently supports only macOS.");
+    fail("unsigned Char currently supports only macOS.");
   }
 
   if (process.arch !== "arm64") {
-    fail("unsigned {char} currently supports only Apple Silicon Macs.");
+    fail("unsigned Char currently supports only Apple Silicon Macs.");
   }
 
   const bundledCliPath = findBundledCliPath();
@@ -69,7 +69,7 @@ function main(args) {
   fail(
     [
       "could not find a bundled uchar CLI.",
-      "Install unsigned {char} in /Applications or ~/Applications,",
+      "Install unsigned Char in /Applications or ~/Applications,",
       "or build a local app bundle with `bun run tauri build --debug`.",
     ].join("\n"),
   );
@@ -101,7 +101,7 @@ function openDesktopApp() {
 
   fail(
     [
-      "could not find unsigned {char}.app.",
+      "could not find unsigned Char.app.",
       "Install the desktop app in /Applications or ~/Applications,",
       "or build a local app bundle with `bun run tauri build --debug`.",
     ].join("\n"),

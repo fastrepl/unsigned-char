@@ -11,10 +11,10 @@ function formatUpdateMessage(version: string, notes?: string | null) {
   const normalizedNotes = notes?.trim();
 
   if (!normalizedNotes) {
-    return `unsigned {char} ${version} is available. Install it now?`;
+    return `unsigned Char ${version} is available. Install it now?`;
   }
 
-  return `unsigned {char} ${version} is available.\n\n${normalizedNotes}\n\nInstall it now?`;
+  return `unsigned Char ${version} is available.\n\n${normalizedNotes}\n\nInstall it now?`;
 }
 
 async function runUpdateCheck(options: { userInitiated: boolean }) {
@@ -41,7 +41,7 @@ async function runUpdateCheck(options: { userInitiated: boolean }) {
 
     if (!update) {
       if (options.userInitiated) {
-        window.alert("unsigned {char} is up to date.");
+        window.alert("unsigned Char is up to date.");
       }
 
       return;
@@ -56,7 +56,7 @@ async function runUpdateCheck(options: { userInitiated: boolean }) {
     await update.downloadAndInstall();
 
     const shouldRestart = window.confirm(
-      `unsigned {char} ${update.version} was installed. Restart now to finish the update?`,
+      `unsigned Char ${update.version} was installed. Restart now to finish the update?`,
     );
 
     if (shouldRestart) {

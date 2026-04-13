@@ -34,8 +34,8 @@ use tauri::{
 };
 use tracing::{error, info, warn};
 
-const APP_NAME: &str = "unsigned char";
-const APP_DISPLAY_NAME: &str = "unsigned {char}";
+const APP_STORAGE_DIR_NAME: &str = "unsigned char";
+const APP_DISPLAY_NAME: &str = "unsigned Char";
 const SETTINGS_CONFIG_FILE: &str = "settings.json";
 const LEGACY_GENERAL_SETTINGS_FILE: &str = "general-settings.json";
 const LEGACY_MODEL_SETTINGS_FILE: &str = "model-settings.json";
@@ -472,7 +472,7 @@ fn onboarding_state<R: tauri::Runtime>(
     let model_settings = build_model_settings_state(&app, &load_model_settings(&app)?)?;
 
     Ok(OnboardingState {
-        product_name: "unsigned char",
+        product_name: APP_DISPLAY_NAME,
         engine: model_settings.selected_model_label.to_string(),
         reference: model_settings
             .selected_reference
@@ -1124,7 +1124,7 @@ fn build_app_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result
     #[cfg(target_os = "macos")]
     let app_menu = Submenu::with_items(
         app,
-        APP_NAME,
+        APP_DISPLAY_NAME,
         true,
         &[
             &PredefinedMenuItem::about(app, Some(&about_label), Some(about_metadata))?,
@@ -1252,8 +1252,9 @@ fn build_model_settings_state<R: tauri::Runtime>(
             resolve_supported_batch_model(app, recommendation.model_id, &general_settings)?;
         recommendation.model_id = fallback_model_id;
         recommendation.reason = format!(
-            "{} needs the MLX metal bundle, which is missing in this build. unsigned char recommends {} instead.",
+            "{} needs the MLX metal bundle, which is missing in this build. {} recommends {} instead.",
             speech_model_spec(requested_recommendation_model_id).label,
+            APP_DISPLAY_NAME,
             speech_model_spec(fallback_model_id).label
         );
     }
@@ -1575,7 +1576,7 @@ fn managed_model_path_for<R: tauri::Runtime>(
 fn meeting_exports_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
     app.path()
         .document_dir()
-        .map(|path| path.join(APP_NAME))
+        .map(|path| path.join(APP_STORAGE_DIR_NAME))
         .map_err(|error| error.to_string())
 }
 

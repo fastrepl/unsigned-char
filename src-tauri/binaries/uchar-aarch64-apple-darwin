@@ -32,7 +32,7 @@ main_executable=$(
 main_binary="$script_dir/$main_executable"
 
 if [ ! -x "$main_binary" ]; then
-  fail "could not find the bundled unsigned {char} executable."
+  fail "could not find the bundled unsigned Char executable."
 fi
 
 exec "$main_binary" --uchar-cli "$@"

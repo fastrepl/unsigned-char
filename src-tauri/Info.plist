@@ -3,8 +3,8 @@
 <plist version="1.0">
   <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>unsigned char needs microphone access to hear your side of the meeting.</string>
+    <string>unsigned Char needs microphone access to hear your side of the meeting.</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>unsigned char needs system audio access to hear everyone else in the meeting.</string>
+    <string>unsigned Char needs system audio access to hear everyone else in the meeting.</string>
   </dict>
 </plist>
