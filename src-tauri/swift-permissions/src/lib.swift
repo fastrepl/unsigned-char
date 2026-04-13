@@ -41,59 +41,42 @@ private func mapAudioApplicationPermission(_ permission: AVAudioApplication.reco
   }
 }
 
+private func captureMicrophonePermissionStatus() -> Int {
+  mapCaptureMicrophoneStatus(AVCaptureDevice.authorizationStatus(for: .audio))
+}
+
+private func combinedMicrophonePermissionStatus(appStatus: Int, captureStatus: Int) -> Int {
+  if appStatus == grantedValue || captureStatus == grantedValue {
+    return grantedValue
+  }
+
+  if appStatus == errorValue {
+    return captureStatus
+  }
+
+  if captureStatus == errorValue {
+    return appStatus
+  }
+
+  if appStatus == deniedValue || captureStatus == deniedValue {
+    return deniedValue
+  }
+
+  return neverRequestedValue
+}
+
 private func currentMicrophonePermissionStatus() -> Int {
-  let captureStatus = mapCaptureMicrophoneStatus(AVCaptureDevice.authorizationStatus(for: .audio))
+  let captureStatus = captureMicrophonePermissionStatus()
 
   if #available(macOS 14.0, *) {
     let appStatus = mapAudioApplicationPermission(AVAudioApplication.shared.recordPermission)
-
-    if appStatus == grantedValue || captureStatus == grantedValue {
-      return grantedValue
-    }
-
-    if appStatus == neverRequestedValue || captureStatus == neverRequestedValue {
-      return neverRequestedValue
-    }
-
-    return appStatus == errorValue ? captureStatus : appStatus
+    return combinedMicrophonePermissionStatus(appStatus: appStatus, captureStatus: captureStatus)
   }
 
   return captureStatus
 }
 
-@_cdecl("_microphone_permission_status")
-public func _microphone_permission_status() -> Int {
-  currentMicrophonePermissionStatus()
-}
-
-@_cdecl("_request_microphone_permission")
-public func _request_microphone_permission() -> Bool {
-  if currentMicrophonePermissionStatus() == grantedValue {
-    return true
-  }
-
-  if #available(macOS 14.0, *) {
-    switch AVAudioApplication.shared.recordPermission {
-    case .granted:
-      return true
-    case .denied:
-      return currentMicrophonePermissionStatus() == grantedValue
-    case .undetermined:
-      let semaphore = DispatchSemaphore(value: 0)
-      var granted = false
-
-      AVAudioApplication.requestRecordPermission { allowed in
-        granted = allowed
-        semaphore.signal()
-      }
-
-      _ = semaphore.wait(timeout: .now() + .seconds(60))
-      return granted || currentMicrophonePermissionStatus() == grantedValue
-    @unknown default:
-      return currentMicrophonePermissionStatus() == grantedValue
-    }
-  }
-
+private func requestCaptureMicrophonePermission() -> Bool {
   let status = AVCaptureDevice.authorizationStatus(for: .audio)
 
   switch status {
@@ -115,6 +98,58 @@ public func _request_microphone_permission() -> Bool {
   @unknown default:
     return false
   }
+}
+
+@available(macOS 14.0, *)
+private func requestAppMicrophonePermission() -> Bool {
+  switch AVAudioApplication.shared.recordPermission {
+  case .granted:
+    return true
+  case .denied:
+    return false
+  case .undetermined:
+    let semaphore = DispatchSemaphore(value: 0)
+    var granted = false
+
+    AVAudioApplication.requestRecordPermission { allowed in
+      granted = allowed
+      semaphore.signal()
+    }
+
+    _ = semaphore.wait(timeout: .now() + .seconds(60))
+    return granted
+  @unknown default:
+    return false
+  }
+}
+
+@_cdecl("_microphone_permission_status")
+public func _microphone_permission_status() -> Int {
+  currentMicrophonePermissionStatus()
+}
+
+@_cdecl("_request_microphone_permission")
+public func _request_microphone_permission() -> Bool {
+  if currentMicrophonePermissionStatus() == grantedValue {
+    return true
+  }
+
+  if #available(macOS 14.0, *) {
+    let appStatus = mapAudioApplicationPermission(AVAudioApplication.shared.recordPermission)
+    if appStatus == neverRequestedValue && requestAppMicrophonePermission() {
+      return true
+    }
+
+    if currentMicrophonePermissionStatus() == grantedValue {
+      return true
+    }
+  }
+
+  if requestCaptureMicrophonePermission() {
+    return true
+  }
+
+  return currentMicrophonePermissionStatus() == grantedValue
 }
 
 @_cdecl("_audio_capture_permission_status")
