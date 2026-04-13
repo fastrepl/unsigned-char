@@ -222,6 +222,7 @@ const SETTINGS_WINDOW_LABEL = "settings";
 const LIVE_TRANSCRIPTION_POLL_MS = 1200;
 const LIVE_TRANSCRIPTION_STOP_WAIT_MS = 250;
 const MODEL_DOWNLOAD_POLL_MS = 1000;
+const MODEL_DOWNLOAD_START_GRACE_MS = 4000;
 const MEETING_MARKDOWN_SYNC_MS = 250;
 const MARKDOWN_SAVE_ERROR_PREFIX = "Markdown save failed:";
 const liveTranscriptionPermissionKinds: PermissionKind[] = ["microphone", "systemAudio"];
@@ -232,6 +233,7 @@ type PendingAutoDiarization = {
 
 const pendingAutoDiarizationRuns: PendingAutoDiarization[] = [];
 let autoDiarizationDrainRunning = false;
+let modelDownloadStartDeadline = 0;
 
 export const currentWindow = getCurrentWindow();
 export const isSettingsWindow = currentWindow.label === SETTINGS_WINDOW_LABEL;
@@ -1083,6 +1085,23 @@ function syncModelDownloadPolling() {
   }, MODEL_DOWNLOAD_POLL_MS);
 }
 
+function modelDownloadStartPending() {
+  return modelDownloadStartDeadline > Date.now();
+}
+
+function optimisticModelDownloadState(): ManagedModelDownloadState {
+  const selectedModelLabel = state.modelSettings?.selectedModelLabel ?? "transcription model";
+
+  return {
+    status: "downloading",
+    localPath: state.modelSettings?.selectedModelLocalPath || state.modelDownload?.localPath || "",
+    currentFile: `Preparing ${selectedModelLabel}...`,
+    bytesDownloaded: 0,
+    totalBytes: null,
+    error: null,
+  };
+}
+
 async function refreshPermissions(silent = false) {
   try {
     const onboarding = await invoke<OnboardingState>("onboarding_state");
@@ -1107,16 +1126,42 @@ async function refreshModelSettings(silent = false) {
 
 async function refreshManagedModelDownloadState(silent = false) {
   const previousStatus = state.modelDownload?.status ?? null;
+  const previousDownload = state.modelDownload;
 
   try {
     const modelDownload = await invoke<ManagedModelDownloadState>("managed_model_download_state");
-    patch({ modelDownload });
+    if (
+      previousStatus === "downloading" &&
+      modelDownload.status === "idle" &&
+      previousDownload &&
+      modelDownloadStartPending()
+    ) {
+      syncModelDownloadPolling();
+      return;
+    }
+
+    let nextDownload = modelDownload;
+    if (previousStatus === "downloading" && modelDownload.status === "idle" && previousDownload) {
+      nextDownload = {
+        ...previousDownload,
+        status: "error",
+        currentFile: null,
+        error: "Model download did not start. Try again.",
+      };
+    }
+
+    if (nextDownload.status !== "downloading") {
+      modelDownloadStartDeadline = 0;
+    }
+
+    patch({ modelDownload: nextDownload });
     syncModelDownloadPolling();
 
-    if (previousStatus === "downloading" && modelDownload.status !== "downloading") {
+    if (previousStatus === "downloading" && nextDownload.status !== "downloading") {
       await Promise.all([refreshModelSettings(true), refreshPermissions(true)]);
     }
   } catch (error) {
+    modelDownloadStartDeadline = 0;
     if (!silent) {
       patch({ permissionNote: `Failed to load model download state: ${String(error)}` });
     }
@@ -1853,19 +1898,36 @@ async function startManagedModelDownload() {
     return;
   }
 
+  const pendingDownload = optimisticModelDownloadState();
+  modelDownloadStartDeadline = Date.now() + MODEL_DOWNLOAD_START_GRACE_MS;
+
   patch({
     modelBusy: true,
     permissionNote: "",
+    modelDownload: pendingDownload,
   });
+  syncModelDownloadPolling();
 
   try {
     const modelDownload = await invoke<ManagedModelDownloadState>("download_managed_model");
-    patch({ modelDownload });
+    patch({
+      modelDownload:
+        modelDownload.status === "idle" && modelDownloadStartPending() ? pendingDownload : modelDownload,
+    });
+    syncModelDownloadPolling();
     await Promise.all([refreshManagedModelDownloadState(true), refreshModelSettings(true)]);
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : `Model download failed: ${String(error)}`;
+    modelDownloadStartDeadline = 0;
     patch({
-      permissionNote:
-        error instanceof Error ? error.message : `Model download failed: ${String(error)}`,
+      modelDownload: {
+        ...pendingDownload,
+        status: "error",
+        currentFile: null,
+        error: message,
+      },
+      permissionNote: "",
     });
   } finally {
     patch({ modelBusy: false });
