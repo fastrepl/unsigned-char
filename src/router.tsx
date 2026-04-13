@@ -990,16 +990,6 @@ function HomeScreen() {
                 </CardHeader>
                 <CardPanel className="pt-4">
                   <p className="text-sm text-zinc-500">{setupBanner.detail}</p>
-                  {setupBanner.localPath ? (
-                    <div className={cn("mt-4", insetPanelClass)}>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                        Storage
-                      </p>
-                      <code className="mt-1 block break-all text-xs text-zinc-700">
-                        {setupBanner.localPath}
-                      </code>
-                    </div>
-                  ) : null}
                 </CardPanel>
                 {showModelDownloadGauge ? (
                   <CardFooter className="border-t-0 pt-0">

@@ -224,7 +224,6 @@ type SetupBannerContent = {
   title: string;
   copy: string;
   detail: string;
-  localPath: string;
   actionLabel: string | null;
 } | null;
 
@@ -1026,7 +1025,6 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
   const isDownloading = download?.status === "downloading";
   const isError = download?.status === "error";
   const selectedModelLabel = snapshot.modelSettings.selectedModelLabel;
-  const localPath = download?.localPath || snapshot.modelSettings.selectedModelLocalPath;
   const modeCopy =
     snapshot.modelSettings.processingMode === "batch"
       ? "post-meeting batch transcription"
@@ -1044,7 +1042,6 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
       title: "Transcription model setup in progress",
       copy: `unsigned {char} is downloading ${selectedModelLabel} and storing it locally on this Mac.`,
       detail: progress,
-      localPath,
       actionLabel: null,
     };
   }
@@ -1055,7 +1052,6 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
       title: "Transcription model setup failed",
       copy: download.error ?? "The model download did not complete.",
       detail: "Retry to finish local transcription setup.",
-      localPath,
       actionLabel: "Retry download",
     };
   }
@@ -1065,7 +1061,6 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
     title: "Download transcription model",
     copy: `Download ${selectedModelLabel} once to run ${modeCopy} locally. The model is cached on this device.`,
     detail: snapshot.modelSettings.selectedModelDetail,
-    localPath,
     actionLabel: "Download model",
   };
 }
