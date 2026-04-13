@@ -1538,7 +1538,7 @@ function SettingsScreen() {
         <div className="h-full overflow-y-auto">
           <div className={cn("mx-auto flex flex-col gap-6", settingsContentWidthClass, settingsContentInsetClass)}>
             <Card id={AI_SUMMARIES_SETTINGS_SECTION_ID} className="overflow-visible">
-              <CardHeader>
+              <CardHeader className="pb-2">
                 <CardTitle>General</CardTitle>
               </CardHeader>
               <CardPanel className="grid gap-6 pt-0">
@@ -1584,7 +1584,7 @@ function SettingsScreen() {
             </Card>
 
             <Card className="overflow-visible">
-              <CardHeader className="flex-row items-start justify-between gap-4">
+              <CardHeader className="flex-row items-start justify-between gap-4 pb-2">
                 <CardTitle>Transcription model</CardTitle>
                 <CardAction>
                   <StatusBadge tone={modelStatusTone}>{modelStatusLabel}</StatusBadge>
@@ -1723,7 +1723,7 @@ function SettingsScreen() {
             </Card>
 
             <Card className="overflow-visible">
-              <CardHeader className="flex-row items-start justify-between gap-4">
+              <CardHeader className="flex-row items-start justify-between gap-4 pb-2">
                 <CardTitle>AI summaries</CardTitle>
                 <CardAction>
                   <StatusBadge tone={summaryStatusTone}>{summaryStatusLabel}</StatusBadge>
