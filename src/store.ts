@@ -841,6 +841,7 @@ function preferredTranscriptEntry(left: TranscriptEntry, right: TranscriptEntry)
 function preferredCrossSourceTranscriptEntry(left: TranscriptEntry, right: TranscriptEntry) {
   const leftLength = transcriptComparisonTokens(left.text).length;
   const rightLength = transcriptComparisonTokens(right.text).length;
+  const preferredSource = left.source;
 
   if (Math.abs(leftLength - rightLength) <= 2) {
     if (left.source === "system" && right.source !== "system") {
@@ -848,12 +849,18 @@ function preferredCrossSourceTranscriptEntry(left: TranscriptEntry, right: Trans
     }
 
     if (right.source === "system" && left.source !== "system") {
-      return right;
+      return {
+        ...right,
+        source: preferredSource,
+      };
     }
   }
 
   if (rightLength >= leftLength * 1.2) {
-    return right;
+    return {
+      ...right,
+      source: preferredSource,
+    };
   }
 
   return left;
