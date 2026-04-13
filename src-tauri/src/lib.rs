@@ -1205,7 +1205,6 @@ fn build_model_settings_state<R: tauri::Runtime>(
     let selected_model_status = build_selected_model_status(
         selected_spec.label,
         settings.processing_mode(),
-        &selected_model_path,
         selected_ready,
     );
 
@@ -2031,21 +2030,18 @@ fn selected_model_languages(settings: &StoredGeneralSettings) -> Vec<String> {
 fn build_selected_model_status(
     label: &str,
     processing_mode: TranscriptionMode,
-    local_path: &Path,
     ready: bool,
 ) -> String {
     if ready {
-        return format!("Using {label} from {}.", local_path.display());
+        return format!("{label} is ready for local transcription.");
     }
 
     match processing_mode {
         TranscriptionMode::Realtime => format!(
-            "Download {label} before starting live transcription. The files stay cached at {}.",
-            local_path.display()
+            "Download {label} before starting live transcription."
         ),
         TranscriptionMode::Batch => format!(
-            "Download {label} before post-meeting batch transcription can run. The files stay cached at {}.",
-            local_path.display()
+            "Download {label} before post-meeting batch transcription can run."
         ),
     }
 }

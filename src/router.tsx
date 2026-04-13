@@ -1744,6 +1744,35 @@ function SettingsScreen() {
                     {snapshot.modelSettings.selectedModelSizeLabel}
                   </p>
 
+                  {!modelReady ? (
+                    <div className="rounded-[calc(var(--radius)-6px)] border border-amber-200 bg-amber-50/80 px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <Badge variant="warning">Download required</Badge>
+                          <p className="text-sm leading-6 text-amber-900">
+                            Download {snapshot.modelSettings.selectedModelLabel} to use this selection locally.
+                          </p>
+                        </div>
+                        {!showModelDownloadGauge ? (
+                          <Button
+                            disabled={snapshot.modelBusy}
+                            onClick={() => {
+                              void appStore.startManagedModelDownload();
+                            }}
+                          >
+                            Download model
+                          </Button>
+                        ) : null}
+                      </div>
+
+                      {showModelDownloadGauge ? (
+                        <div className="mt-3">
+                          <ModelDownloadGauge busy={snapshot.modelBusy} download={snapshot.modelDownload} />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="rounded-[calc(var(--radius)-6px)] border border-[color:var(--border)] bg-white/70 px-3 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
                       Recommendation
@@ -1761,22 +1790,6 @@ function SettingsScreen() {
                   ) : null}
                 </div>
               </CardPanel>
-              {!modelReady ? (
-                <CardFooter className="border-t-0 pt-0">
-                  {showModelDownloadGauge ? (
-                    <ModelDownloadGauge busy={snapshot.modelBusy} download={snapshot.modelDownload} />
-                  ) : (
-                    <Button
-                      disabled={snapshot.modelBusy}
-                      onClick={() => {
-                        void appStore.startManagedModelDownload();
-                      }}
-                    >
-                      Download model
-                    </Button>
-                  )}
-                </CardFooter>
-              ) : null}
             </Card>
 
             <Card className="overflow-visible">
