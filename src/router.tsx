@@ -1143,6 +1143,11 @@ function MeetingScreen() {
     snapshot.transcriptionRunning,
     snapshot.recordingMeetingId,
   );
+  const isStartingMeeting =
+    meeting.status === "live" &&
+    snapshot.startMeetingBusy &&
+    snapshot.recordingMeetingId === meeting.id &&
+    !snapshot.transcriptionRunning;
   const isMeetingListening =
     snapshot.recordingMeetingId === meeting.id ||
     (meeting.status === "live" && snapshot.transcriptionRunning);
@@ -1183,7 +1188,9 @@ function MeetingScreen() {
     isMeetingListening ||
     transcriptEntries.length === 0;
   const emptyTranscriptCopy =
-    meeting.status === "live" && snapshot.modelSettings?.processingMode === "batch"
+    isStartingMeeting
+      ? "Transcription is starting."
+      : meeting.status === "live" && snapshot.modelSettings?.processingMode === "batch"
       ? "Transcript will be generated after you stop the meeting."
       : "Transcript will appear here.";
 
@@ -1285,7 +1292,11 @@ function MeetingScreen() {
             }}
           >
             {meeting.status === "live" ? (
-              isStoppingMeeting ? "Processing audio" : "Stop listening"
+              isStoppingMeeting
+                ? "Processing audio"
+                : isStartingMeeting
+                  ? "Starting listening"
+                  : "Stop listening"
             ) : (
               <>
                 <LiveIndicator />

@@ -1159,6 +1159,31 @@ function createMeeting(meetingId = crypto.randomUUID(), audioPath = "") {
   return meeting;
 }
 
+function discardMeeting(meetingId: string) {
+  const deletedActiveMeeting = currentMeetingIdFromHash() === meetingId;
+  const clearedRecordingMeeting = state.recordingMeetingId === meetingId;
+
+  clearMeetingMarkdownSync(meetingId);
+
+  state = {
+    ...state,
+    meetings: state.meetings.filter((candidate) => candidate.id !== meetingId),
+    recordingMeetingId: clearedRecordingMeeting ? null : state.recordingMeetingId,
+    transcriptionRunning: clearedRecordingMeeting ? false : state.transcriptionRunning,
+    transcriptionStopping: clearedRecordingMeeting ? false : state.transcriptionStopping,
+    liveTranscriptText: clearedRecordingMeeting ? "" : state.liveTranscriptText,
+    liveTranscriptEntries: clearedRecordingMeeting ? [] : state.liveTranscriptEntries,
+    liveTranscriptionMode: clearedRecordingMeeting ? null : state.liveTranscriptionMode,
+    meetingNote: deletedActiveMeeting ? "" : state.meetingNote,
+  };
+  persistMeetings();
+  emit();
+
+  if (deletedActiveMeeting) {
+    setHashRoute("/");
+  }
+}
+
 function queueMeetingAutoDiarization(meetingId: string) {
   const meeting = getMeeting(meetingId);
   if (!meeting || !meeting.audioPath.trim() || !state.diarizationSettings?.enabled) {
@@ -1888,6 +1913,8 @@ async function startMeeting() {
     return null;
   }
 
+  let finishStartingInBackground = false;
+
   patch({
     startMeetingBusy: true,
     permissionNote: "",
@@ -1901,9 +1928,37 @@ async function startMeeting() {
     await prepareMeetingPermissions();
     await stopActiveRecordingIfNeeded();
     patch({ transcriptionBusy: true });
-    const meetingId = crypto.randomUUID();
-    const snapshot = await startLiveTranscriptionSession(meetingId);
-    const meeting = createMeeting(meetingId, snapshot.audioPath);
+    const meeting = createMeeting();
+
+    void (async () => {
+      try {
+        const snapshot = await startLiveTranscriptionSession(meeting.id);
+        const nextAudioPath = snapshot.audioPath.trim();
+        updateMeeting(meeting.id, (current) => {
+          if (current.audioPath === nextAudioPath) {
+            return current;
+          }
+
+          return {
+            ...current,
+            audioPath: nextAudioPath,
+            updatedAt: current.updatedAt,
+          };
+        });
+      } catch (error) {
+        discardMeeting(meeting.id);
+        patch({
+          permissionNote: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        patch({
+          transcriptionBusy: false,
+          startMeetingBusy: false,
+        });
+      }
+    })();
+
+    finishStartingInBackground = true;
     return meeting;
   } catch (error) {
     patch({
@@ -1911,10 +1966,12 @@ async function startMeeting() {
     });
     return null;
   } finally {
-    patch({
-      transcriptionBusy: false,
-      startMeetingBusy: false,
-    });
+    if (!finishStartingInBackground) {
+      patch({
+        transcriptionBusy: false,
+        startMeetingBusy: false,
+      });
+    }
   }
 }
 
