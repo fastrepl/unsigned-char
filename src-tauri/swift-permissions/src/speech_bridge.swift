@@ -245,6 +245,96 @@ private struct FileDiarizationPayload: Codable {
   var error: String?
 }
 
+private func constrainDiarizedSegments(
+  _ segments: [DiarizedSegment],
+  requestedSpeakerCount: Int?
+) -> [DiarizedSegment] {
+  guard
+    let requestedSpeakerCount,
+    requestedSpeakerCount > 0,
+    !segments.isEmpty
+  else {
+    return segments
+  }
+
+  if requestedSpeakerCount == 1 {
+    return segments.map { segment in
+      DiarizedSegment(
+        startTime: segment.startTime,
+        endTime: segment.endTime,
+        speakerId: 0
+      )
+    }
+  }
+
+  let speakerDurations = Dictionary(grouping: segments, by: \.speakerId)
+    .mapValues { speakerSegments in
+      speakerSegments.reduce(Float.zero) { partialResult, segment in
+        partialResult + segment.duration
+      }
+    }
+
+  if speakerDurations.count <= requestedSpeakerCount {
+    return compactDiarizedSpeakerIds(segments)
+  }
+
+  let retainedSpeakerIds = Set(
+    speakerDurations
+      .sorted { lhs, rhs in
+        if lhs.value == rhs.value {
+          return lhs.key < rhs.key
+        }
+
+        return lhs.value > rhs.value
+      }
+      .prefix(requestedSpeakerCount)
+      .map(\.key)
+  )
+
+  let retainedSegments = segments.filter { retainedSpeakerIds.contains($0.speakerId) }
+  let fallbackSpeakerId = retainedSpeakerIds.min() ?? 0
+  let remapped = segments.map { segment in
+    let speakerId: Int
+    if retainedSpeakerIds.contains(segment.speakerId) {
+      speakerId = segment.speakerId
+    } else {
+      speakerId =
+        retainedSegments.min(by: { lhs, rhs in
+          diarizedSegmentDistance(from: segment, to: lhs) < diarizedSegmentDistance(from: segment, to: rhs)
+        })?.speakerId ?? fallbackSpeakerId
+    }
+
+    return DiarizedSegment(
+      startTime: segment.startTime,
+      endTime: segment.endTime,
+      speakerId: speakerId
+    )
+  }
+
+  return compactDiarizedSpeakerIds(remapped)
+}
+
+private func diarizedSegmentDistance(from lhs: DiarizedSegment, to rhs: DiarizedSegment) -> Float {
+  if lhs.endTime >= rhs.startTime && rhs.endTime >= lhs.startTime {
+    return 0
+  }
+
+  return min(abs(lhs.startTime - rhs.endTime), abs(rhs.startTime - lhs.endTime))
+}
+
+private func compactDiarizedSpeakerIds(_ segments: [DiarizedSegment]) -> [DiarizedSegment] {
+  let speakerIds = Array(Set(segments.map(\.speakerId))).sorted()
+  let speakerMap = Dictionary(uniqueKeysWithValues: speakerIds.enumerated().map { ($1, $0) })
+
+  return segments.map { segment in
+    DiarizedSegment(
+      startTime: segment.startTime,
+      endTime: segment.endTime,
+      speakerId: speakerMap[segment.speakerId] ?? segment.speakerId
+    )
+  }
+}
+
 private func encodeJSON<T: Encodable>(_ value: T) -> String {
   guard let data = try? JSONEncoder().encode(value),
         let string = String(data: data, encoding: .utf8)
@@ -1053,9 +1143,13 @@ private actor SpeechBridge {
     return try model.transcribe(audio: audio, sampleRate: 16000, language: language)
   }
 
-  func diarizeAudioFileJSON(audioPath: String) async -> String {
+  func diarizeAudioFileJSON(audioPath: String, speakerCount: Int) async -> String {
     do {
-      let payload = try await diarizeRecordedAudio(atPath: audioPath)
+      let requestedSpeakerCount = speakerCount > 0 ? speakerCount : nil
+      let payload = try await diarizeRecordedAudio(
+        atPath: audioPath,
+        requestedSpeakerCount: requestedSpeakerCount
+      )
       return encodeJSON(payload)
     } catch {
       return encodeJSON(
@@ -1069,21 +1163,25 @@ private actor SpeechBridge {
     }
   }
 
-  private func diarizeRecordedAudio(atPath path: String) async throws -> FileDiarizationPayload {
+  private func diarizeRecordedAudio(
+    atPath path: String,
+    requestedSpeakerCount: Int?
+  ) async throws -> FileDiarizationPayload {
     let url = URL(fileURLWithPath: path)
     let audio = try AudioFileLoader.load(url: url, targetSampleRate: 16000)
     let diarizer = try await ensureDiarizerLoaded()
     let result = diarizer.diarize(audio: audio, sampleRate: 16000, config: .default)
+    let segments = constrainDiarizedSegments(result.segments, requestedSpeakerCount: requestedSpeakerCount)
 
     return FileDiarizationPayload(
-      segments: result.segments.map { segment in
+      segments: segments.map { segment in
         DiarizationSegmentPayload(
           speaker: "speaker_\(segment.speakerId)",
           startSeconds: Double(segment.startTime),
           endSeconds: Double(segment.endTime)
         )
       },
-      speakerCount: result.numSpeakers,
+      speakerCount: Set(segments.map(\.speakerId)).count,
       pipelineSource: Self.diarizationPipelineSource,
       error: nil
     )
@@ -1259,9 +1357,12 @@ public func _speech_transcribe_audio_file(
 }
 
 @_cdecl("_speech_diarize_audio_file")
-public func _speech_diarize_audio_file(audioPath: SRString) -> SRString {
+public func _speech_diarize_audio_file(audioPath: SRString, speakerCount: Int) -> SRString {
   SRString(waitForValue {
-    await SpeechBridge.shared.diarizeAudioFileJSON(audioPath: audioPath.toString())
+    await SpeechBridge.shared.diarizeAudioFileJSON(
+      audioPath: audioPath.toString(),
+      speakerCount: speakerCount
+    )
   })
 }
 

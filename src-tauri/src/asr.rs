@@ -6,7 +6,7 @@ use tracing::info;
 use crate::audio_capture::LiveCaptureSession;
 
 #[cfg(target_os = "macos")]
-use swift_rs::{swift, Bool, SRData, SRString};
+use swift_rs::{swift, Bool, Int, SRData, SRString};
 
 #[cfg(target_os = "macos")]
 swift!(fn _speech_model_cache_dir(model_id: &SRString) -> SRString);
@@ -23,7 +23,7 @@ swift!(fn _speech_transcribe_audio_file(
     language: &SRString
 ) -> SRString);
 #[cfg(target_os = "macos")]
-swift!(fn _speech_diarize_audio_file(audio_path: &SRString) -> SRString);
+swift!(fn _speech_diarize_audio_file(audio_path: &SRString, speaker_count: Int) -> SRString);
 #[cfg(target_os = "macos")]
 swift!(fn _speech_live_transcription_start(
     mode: &SRString,
@@ -307,13 +307,17 @@ pub fn transcribe_audio_file(model_id: &str, audio_path: &Path, language: &str) 
     }
 }
 
-pub fn diarize_audio_file(audio_path: &Path) -> Result<FileDiarizationPayload, String> {
+pub fn diarize_audio_file(
+    audio_path: &Path,
+    speaker_count: Option<usize>,
+) -> Result<FileDiarizationPayload, String> {
     #[cfg(target_os = "macos")]
     {
         let audio_path_string = audio_path.display().to_string();
         let audio_path: SRString = audio_path_string.as_str().into();
+        let speaker_count = speaker_count.unwrap_or(0) as Int;
         let response: FileDiarizationPayload = decode_json(
-            unsafe { _speech_diarize_audio_file(&audio_path) },
+            unsafe { _speech_diarize_audio_file(&audio_path, speaker_count) },
             "speech-swift diarization",
         )?;
 
@@ -331,6 +335,7 @@ pub fn diarize_audio_file(audio_path: &Path) -> Result<FileDiarizationPayload, S
     #[cfg(not(target_os = "macos"))]
     {
         let _ = audio_path;
+        let _ = speaker_count;
         Err("speech-swift is only available on macOS.".to_string())
     }
 }

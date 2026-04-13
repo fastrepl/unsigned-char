@@ -809,7 +809,7 @@ async fn run_local_diarization<R: tauri::Runtime>(
         }
 
         let resolved_audio_path = resolve_audio_file_path(&input.audio_path)?;
-        let result = speech_diarize_audio_file(&resolved_audio_path)?;
+        let result = speech_diarize_audio_file(&resolved_audio_path, input.speaker_count)?;
 
         info!(
             audio_path = %resolved_audio_path.display(),
