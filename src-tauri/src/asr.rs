@@ -278,7 +278,11 @@ pub fn reset_managed_model(model_id: &str) -> Result<(), String> {
     }
 }
 
-pub fn transcribe_audio_file(model_id: &str, audio_path: &Path, language: &str) -> Result<String, String> {
+pub fn transcribe_audio_file(
+    model_id: &str,
+    audio_path: &Path,
+    language: &str,
+) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
         let model_id: SRString = model_id.into();

@@ -1075,14 +1075,13 @@ fn build_app_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result
         true,
         Some("CmdOrCtrl+,"),
     )?;
-    let check_for_updates_item =
-        MenuItem::with_id(
-            app,
-            CHECK_FOR_UPDATES_MENU_ID,
-            "Check for Updates...",
-            true,
-            None::<&str>,
-        )?;
+    let check_for_updates_item = MenuItem::with_id(
+        app,
+        CHECK_FOR_UPDATES_MENU_ID,
+        "Check for Updates...",
+        true,
+        None::<&str>,
+    )?;
 
     let edit_menu = Submenu::with_items(
         app,
