@@ -1171,10 +1171,11 @@ function SettingsScreen() {
   const snapshot = useAppState();
   const settingsLoadNote =
     snapshot.permissionNote || snapshot.generalNote || snapshot.summaryNote;
+  const settingsContentWidthClass = isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]";
 
   if (!snapshot.generalSettings || !snapshot.summarySettings || !snapshot.modelSettings) {
     return (
-      <section className={cn("mx-auto flex max-w-[760px] items-center", windowShellHeightClass)}>
+      <section className={cn("mx-auto flex items-center", settingsContentWidthClass, windowShellHeightClass)}>
         <Card className="w-full">
           <CardHeader className="px-8 py-8">
             <CardTitle>{settingsLoadNote ? "Could not load settings" : "Loading preferences..."}</CardTitle>
@@ -1250,347 +1251,347 @@ function SettingsScreen() {
         : "Optional API key";
 
   return (
-    <section
-      className={cn(
-        "mx-auto flex flex-col gap-6 overflow-y-auto",
-        windowShellHeightClass,
-        isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]",
-      )}
-    >
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>Transcription model</CardTitle>
-            <CardDescription>
-              Switch between live captions and post-meeting batch transcription, then choose the
-              local model that best fits this Mac.
-            </CardDescription>
-          </div>
-          <CardAction>
-            <StatusBadge tone={modelStatusTone}>{modelStatusLabel}</StatusBadge>
-          </CardAction>
-        </CardHeader>
-        <CardPanel className="grid gap-6 pt-0">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-            <div>
-              <p className="text-sm font-semibold text-zinc-950">Processing mode</p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                Realtime shows live captions while you record. Batch waits until the meeting ends,
-                then transcribes the saved audio.
-              </p>
-            </div>
-            <SearchableSelect
-              ariaLabel="Processing mode"
-              value={snapshot.modelSettings.processingMode}
-              onChange={(nextValue) => {
-                appStore.setProcessingMode(nextValue as "realtime" | "batch");
-              }}
-              options={PROCESSING_MODE_OPTIONS}
-              placeholder="Select mode"
-              searchPlaceholder="Search mode..."
-              disabled={snapshot.modelBusy || downloadStatus === "downloading"}
-            />
-          </div>
+    <section className={cn("flex min-h-0 flex-col", windowShellHeightClass)}>
+      <div className="relative -mx-4 min-h-0 flex-1">
+        <div className="h-full overflow-y-auto px-5 pt-5 pr-6 pb-6">
+          <div className={cn("mx-auto flex flex-col gap-6", settingsContentWidthClass)}>
+            <Card>
+              <CardHeader className="flex-row items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <CardTitle>Transcription model</CardTitle>
+                  <CardDescription>
+                    Switch between live captions and post-meeting batch transcription, then choose the
+                    local model that best fits this Mac.
+                  </CardDescription>
+                </div>
+                <CardAction>
+                  <StatusBadge tone={modelStatusTone}>{modelStatusLabel}</StatusBadge>
+                </CardAction>
+              </CardHeader>
+              <CardPanel className="grid gap-6 pt-0">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950">Processing mode</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      Realtime shows live captions while you record. Batch waits until the meeting ends,
+                      then transcribes the saved audio.
+                    </p>
+                  </div>
+                  <SearchableSelect
+                    ariaLabel="Processing mode"
+                    value={snapshot.modelSettings.processingMode}
+                    onChange={(nextValue) => {
+                      appStore.setProcessingMode(nextValue as "realtime" | "batch");
+                    }}
+                    options={PROCESSING_MODE_OPTIONS}
+                    placeholder="Select mode"
+                    searchPlaceholder="Search mode..."
+                    disabled={snapshot.modelBusy || downloadStatus === "downloading"}
+                  />
+                </div>
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-            <div>
-              <p className="text-sm font-semibold text-zinc-950">Batch model</p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                Stored even while realtime mode is active, so you can pre-pick the model that runs
-                after a meeting ends.
-              </p>
-            </div>
-            <SearchableSelect
-              ariaLabel="Batch model"
-              value={snapshot.modelSettings.batchModelId}
-              onChange={(nextValue) => {
-                appStore.setBatchModel(nextValue as typeof snapshot.modelSettings.batchModelId);
-              }}
-              options={batchModelOptions}
-              placeholder="Select batch model"
-              searchPlaceholder="Search model..."
-              disabled={snapshot.modelBusy || downloadStatus === "downloading"}
-            />
-          </div>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950">Batch model</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      Stored even while realtime mode is active, so you can pre-pick the model that runs
+                      after a meeting ends.
+                    </p>
+                  </div>
+                  <SearchableSelect
+                    ariaLabel="Batch model"
+                    value={snapshot.modelSettings.batchModelId}
+                    onChange={(nextValue) => {
+                      appStore.setBatchModel(nextValue as typeof snapshot.modelSettings.batchModelId);
+                    }}
+                    options={batchModelOptions}
+                    placeholder="Select batch model"
+                    searchPlaceholder="Search model..."
+                    disabled={snapshot.modelBusy || downloadStatus === "downloading"}
+                  />
+                </div>
 
-          <div className={cn(insetPanelClass, "space-y-3")}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                  Active model
+                <div className={cn(insetPanelClass, "space-y-3")}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                        Active model
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-zinc-950">
+                        {snapshot.modelSettings.selectedModelLabel}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">
+                      {snapshot.modelSettings.deviceProfile.chipLabel} · {snapshot.modelSettings.deviceProfile.memoryGb} GB
+                    </Badge>
+                  </div>
+
+                  <p className="text-sm leading-6 text-zinc-600">
+                    {modelReady
+                      ? snapshot.modelSettings.selectedModelStatus
+                      : setupBanner?.copy ?? snapshot.modelSettings.selectedModelStatus}
+                  </p>
+
+                  <p className="text-sm text-zinc-500">
+                    {selectedModel?.detail} · {snapshot.modelSettings.selectedModelLanguagesLabel} ·{" "}
+                    {snapshot.modelSettings.selectedModelSizeLabel}
+                  </p>
+
+                  <div className="rounded-[calc(var(--radius)-6px)] border border-[color:var(--border)] bg-white/70 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                      Recommendation
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-zinc-950">
+                      {recommendedModel?.label ?? snapshot.modelSettings.selectedModelLabel}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      {snapshot.modelSettings.recommendationReason}
+                    </p>
+                  </div>
+
+                  {setupBanner?.detail ? (
+                    <p className="text-sm text-zinc-500">{setupBanner.detail}</p>
+                  ) : null}
+                </div>
+
+                <p className="text-sm leading-6 text-zinc-600">
+                  Model id: <code>{snapshot.modelSettings.selectedModelRepo}</code>
                 </p>
-                <p className="mt-1 text-sm font-semibold text-zinc-950">
-                  {snapshot.modelSettings.selectedModelLabel}
-                </p>
-              </div>
-              <Badge variant="secondary">
-                {snapshot.modelSettings.deviceProfile.chipLabel} · {snapshot.modelSettings.deviceProfile.memoryGb} GB
-              </Badge>
-            </div>
 
-            <p className="text-sm leading-6 text-zinc-600">
-              {modelReady
-                ? snapshot.modelSettings.selectedModelStatus
-                : setupBanner?.copy ?? snapshot.modelSettings.selectedModelStatus}
-            </p>
+                {(snapshot.modelDownload?.localPath || snapshot.modelSettings.selectedModelLocalPath) ? (
+                  <div className={cn(insetPanelClass)}>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                      Storage
+                    </p>
+                    <code className="mt-1 block break-all text-xs text-zinc-700">
+                      {snapshot.modelDownload?.localPath || snapshot.modelSettings.selectedModelLocalPath}
+                    </code>
+                  </div>
+                ) : null}
+              </CardPanel>
+              {!modelReady ? (
+                <CardFooter className="border-t-0 pt-0">
+                  {showModelDownloadGauge ? (
+                    <ModelDownloadGauge busy={snapshot.modelBusy} download={snapshot.modelDownload} />
+                  ) : (
+                    <Button
+                      disabled={snapshot.modelBusy}
+                      onClick={() => {
+                        void appStore.startManagedModelDownload();
+                      }}
+                    >
+                      Download model
+                    </Button>
+                  )}
+                </CardFooter>
+              ) : null}
+            </Card>
 
-            <p className="text-sm text-zinc-500">
-              {selectedModel?.detail} · {snapshot.modelSettings.selectedModelLanguagesLabel} ·{" "}
-              {snapshot.modelSettings.selectedModelSizeLabel}
-            </p>
+            <Card>
+              <CardHeader className="flex-row items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <CardTitle>AI summaries</CardTitle>
+                  <CardDescription>
+                    Connect an LLM provider to turn transcripts into local meeting summaries.
+                  </CardDescription>
+                </div>
+                <CardAction>
+                  <StatusBadge tone={summaryStatusTone}>{summaryStatusLabel}</StatusBadge>
+                </CardAction>
+              </CardHeader>
+              <CardPanel className="grid gap-6 pt-0">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950">Provider</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      Pick the model provider used when you generate a summary from a transcript.
+                    </p>
+                  </div>
+                  <SearchableSelect
+                    ariaLabel="Summary provider"
+                    value={snapshot.summaryDraft.provider}
+                    onChange={appStore.setSummaryProvider}
+                    options={summaryProviderOptions}
+                    placeholder="Select provider"
+                    searchPlaceholder="Search provider..."
+                    disabled={snapshot.summaryBusy}
+                  />
+                </div>
 
-            <div className="rounded-[calc(var(--radius)-6px)] border border-[color:var(--border)] bg-white/70 px-3 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                Recommendation
-              </p>
-              <p className="mt-1 text-sm font-semibold text-zinc-950">
-                {recommendedModel?.label ?? snapshot.modelSettings.selectedModelLabel}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                {snapshot.modelSettings.recommendationReason}
-              </p>
-            </div>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950">Model</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      Enter the exact chat model identifier for the selected provider.
+                    </p>
+                  </div>
+                  <Input
+                    value={snapshot.summaryDraft.model}
+                    onChange={(event) => {
+                      appStore.setSummaryModel(event.target.value);
+                    }}
+                    placeholder={selectedSummaryProvider?.modelPlaceholder ?? "Model id"}
+                    disabled={snapshot.summaryBusy || !snapshot.summaryDraft.provider}
+                  />
+                </div>
 
-            {setupBanner?.detail ? (
-              <p className="text-sm text-zinc-500">{setupBanner.detail}</p>
-            ) : null}
-          </div>
+                <div>
+                  <p className="text-sm font-semibold text-zinc-950">Base URL</p>
+                  <p className="mt-1 text-sm leading-6 text-zinc-600">
+                    Leave this blank to use the provider default. Add one for local servers or custom
+                    gateways.
+                  </p>
+                  <Input
+                    className="mt-4"
+                    value={snapshot.summaryDraft.baseUrl}
+                    onChange={(event) => {
+                      appStore.setSummaryBaseUrl(event.target.value);
+                    }}
+                    placeholder={selectedSummaryProvider?.defaultBaseUrl || "https://example.com/v1"}
+                    disabled={snapshot.summaryBusy || !snapshot.summaryDraft.provider}
+                  />
+                </div>
 
-          <p className="text-sm leading-6 text-zinc-600">
-            Model id: <code>{snapshot.modelSettings.selectedModelRepo}</code>
-          </p>
+                <div>
+                  <p className="text-sm font-semibold text-zinc-950">API key</p>
+                  <p className="mt-1 text-sm leading-6 text-zinc-600">
+                    {selectedSummaryProvider?.requiresApiKey
+                      ? "Required for this provider. The saved key stays in the app config on this device."
+                      : "Optional. Leave it blank for providers that do not need authentication."}
+                  </p>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <Input
+                      className="flex-1"
+                      type="password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={snapshot.summaryDraft.apiKey}
+                      onChange={(event) => {
+                        appStore.setSummaryApiKey(event.target.value);
+                      }}
+                      placeholder={apiKeyPlaceholder}
+                      disabled={snapshot.summaryBusy || !snapshot.summaryDraft.provider}
+                    />
+                    {snapshot.summaryDraft.apiKeyPresent ? (
+                      <Button
+                        variant="secondary"
+                        disabled={snapshot.summaryBusy}
+                        onClick={() => {
+                          void appStore.removeSummaryApiKey();
+                        }}
+                      >
+                        Remove saved key
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
 
-          {(snapshot.modelDownload?.localPath || snapshot.modelSettings.selectedModelLocalPath) ? (
-            <div className={cn(insetPanelClass)}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                Storage
-              </p>
-              <code className="mt-1 block break-all text-xs text-zinc-700">
-                {snapshot.modelDownload?.localPath || snapshot.modelSettings.selectedModelLocalPath}
-              </code>
-            </div>
-          ) : null}
-        </CardPanel>
-        {!modelReady ? (
-          <CardFooter className="border-t-0 pt-0">
-            {showModelDownloadGauge ? (
-              <ModelDownloadGauge busy={snapshot.modelBusy} download={snapshot.modelDownload} />
-            ) : (
-              <Button
-                disabled={snapshot.modelBusy}
-                onClick={() => {
-                  void appStore.startManagedModelDownload();
-                }}
-              >
-                Download model
-              </Button>
-            )}
-          </CardFooter>
-        ) : null}
-      </Card>
-
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>AI summaries</CardTitle>
-            <CardDescription>
-              Connect an LLM provider to turn transcripts into local meeting summaries.
-            </CardDescription>
-          </div>
-          <CardAction>
-            <StatusBadge tone={summaryStatusTone}>{summaryStatusLabel}</StatusBadge>
-          </CardAction>
-        </CardHeader>
-        <CardPanel className="grid gap-6 pt-0">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-            <div>
-              <p className="text-sm font-semibold text-zinc-950">Provider</p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                Pick the model provider used when you generate a summary from a transcript.
-              </p>
-            </div>
-            <SearchableSelect
-              ariaLabel="Summary provider"
-              value={snapshot.summaryDraft.provider}
-              onChange={appStore.setSummaryProvider}
-              options={summaryProviderOptions}
-              placeholder="Select provider"
-              searchPlaceholder="Search provider..."
-              disabled={snapshot.summaryBusy}
-            />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-            <div>
-              <p className="text-sm font-semibold text-zinc-950">Model</p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                Enter the exact chat model identifier for the selected provider.
-              </p>
-            </div>
-            <Input
-              value={snapshot.summaryDraft.model}
-              onChange={(event) => {
-                appStore.setSummaryModel(event.target.value);
-              }}
-              placeholder={selectedSummaryProvider?.modelPlaceholder ?? "Model id"}
-              disabled={snapshot.summaryBusy || !snapshot.summaryDraft.provider}
-            />
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold text-zinc-950">Base URL</p>
-            <p className="mt-1 text-sm leading-6 text-zinc-600">
-              Leave this blank to use the provider default. Add one for local servers or custom
-              gateways.
-            </p>
-            <Input
-              className="mt-4"
-              value={snapshot.summaryDraft.baseUrl}
-              onChange={(event) => {
-                appStore.setSummaryBaseUrl(event.target.value);
-              }}
-              placeholder={selectedSummaryProvider?.defaultBaseUrl || "https://example.com/v1"}
-              disabled={snapshot.summaryBusy || !snapshot.summaryDraft.provider}
-            />
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold text-zinc-950">API key</p>
-            <p className="mt-1 text-sm leading-6 text-zinc-600">
-              {selectedSummaryProvider?.requiresApiKey
-                ? "Required for this provider. The saved key stays in the app config on this device."
-                : "Optional. Leave it blank for providers that do not need authentication."}
-            </p>
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <Input
-                className="flex-1"
-                type="password"
-                autoComplete="off"
-                spellCheck={false}
-                value={snapshot.summaryDraft.apiKey}
-                onChange={(event) => {
-                  appStore.setSummaryApiKey(event.target.value);
-                }}
-                placeholder={apiKeyPlaceholder}
-                disabled={snapshot.summaryBusy || !snapshot.summaryDraft.provider}
-              />
-              {snapshot.summaryDraft.apiKeyPresent ? (
+                {selectedSummaryProvider?.help ? (
+                  <div className={cn(insetPanelClass, "space-y-2")}>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                      Provider notes
+                    </p>
+                    <p className="text-sm leading-6 text-zinc-600">{selectedSummaryProvider.help}</p>
+                    {snapshot.summaryDraft.provider ? (
+                      <code className="block break-all text-xs text-zinc-700">
+                        {snapshot.summaryDraft.baseUrl.trim() ||
+                          selectedSummaryProvider.defaultBaseUrl ||
+                          "Custom base URL required"}
+                      </code>
+                    ) : null}
+                  </div>
+                ) : null}
+              </CardPanel>
+              <CardFooter className="justify-between">
+                <p className="text-sm text-zinc-500">{snapshot.summarySettings.status}</p>
                 <Button
-                  variant="secondary"
-                  disabled={snapshot.summaryBusy}
+                  disabled={snapshot.summaryBusy || !summarySettingsDirty}
+                  loading={snapshot.summaryBusy}
                   onClick={() => {
-                    void appStore.removeSummaryApiKey();
+                    void appStore.saveSummarySettings();
                   }}
                 >
-                  Remove saved key
+                  Save summary settings
                 </Button>
-              ) : null}
-            </div>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Preferences</CardTitle>
+                <CardDescription>Language and timeline defaults for the local app.</CardDescription>
+              </CardHeader>
+              <CardPanel className="grid gap-6 pt-0">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),180px] md:items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950">Main language</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      Language for summaries, chats, and AI-generated responses
+                    </p>
+                  </div>
+                  <SearchableSelect
+                    ariaLabel="Main language"
+                    value={snapshot.generalDraft.mainLanguage}
+                    onChange={appStore.setMainLanguage}
+                    options={LANGUAGE_OPTIONS}
+                    placeholder="Select language"
+                    searchPlaceholder="Search language..."
+                    disabled={snapshot.generalBusy}
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950">Timezone</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      Override the timezone used for the sidebar timeline
+                    </p>
+                  </div>
+                  <SearchableSelect
+                    ariaLabel="Timezone"
+                    value={snapshot.generalDraft.timezone || systemTimezone}
+                    onChange={(nextValue) => {
+                      appStore.setTimezone(nextValue === systemTimezone ? "" : nextValue);
+                    }}
+                    options={timezoneOptions}
+                    placeholder={`System default (${systemTimezone})`}
+                    searchPlaceholder="Search timezone..."
+                    disabled={snapshot.generalBusy}
+                  />
+                </div>
+
+                <div>
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-950">Spoken languages</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">
+                      Add other languages you use other than the main language
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <SpokenLanguagesCombobox
+                      mainLanguage={snapshot.generalDraft.mainLanguage}
+                      value={snapshot.generalDraft.spokenLanguages}
+                      disabled={snapshot.generalBusy}
+                      onAdd={appStore.addSpokenLanguage}
+                      onRemove={appStore.removeSpokenLanguage}
+                    />
+                  </div>
+                </div>
+              </CardPanel>
+            </Card>
+
+            {snapshot.generalNote ? (
+              <p className="text-sm text-rose-700">{snapshot.generalNote}</p>
+            ) : null}
+            {snapshot.summaryNote ? (
+              <p className="text-sm text-rose-700">{snapshot.summaryNote}</p>
+            ) : null}
+            {snapshot.permissionNote ? (
+              <p className="text-sm text-rose-700">{snapshot.permissionNote}</p>
+            ) : null}
           </div>
-
-          {selectedSummaryProvider?.help ? (
-            <div className={cn(insetPanelClass, "space-y-2")}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                Provider notes
-              </p>
-              <p className="text-sm leading-6 text-zinc-600">{selectedSummaryProvider.help}</p>
-              {snapshot.summaryDraft.provider ? (
-                <code className="block break-all text-xs text-zinc-700">
-                  {snapshot.summaryDraft.baseUrl.trim() ||
-                    selectedSummaryProvider.defaultBaseUrl ||
-                    "Custom base URL required"}
-                </code>
-              ) : null}
-            </div>
-          ) : null}
-        </CardPanel>
-        <CardFooter className="justify-between">
-          <p className="text-sm text-zinc-500">{snapshot.summarySettings.status}</p>
-          <Button
-            disabled={snapshot.summaryBusy || !summarySettingsDirty}
-            loading={snapshot.summaryBusy}
-            onClick={() => {
-              void appStore.saveSummarySettings();
-            }}
-          >
-            Save summary settings
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Preferences</CardTitle>
-          <CardDescription>Language and timeline defaults for the local app.</CardDescription>
-        </CardHeader>
-        <CardPanel className="grid gap-6 pt-0">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),180px] md:items-center">
-            <div>
-              <p className="text-sm font-semibold text-zinc-950">Main language</p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                Language for summaries, chats, and AI-generated responses
-              </p>
-            </div>
-            <SearchableSelect
-              ariaLabel="Main language"
-              value={snapshot.generalDraft.mainLanguage}
-              onChange={appStore.setMainLanguage}
-              options={LANGUAGE_OPTIONS}
-              placeholder="Select language"
-              searchPlaceholder="Search language..."
-              disabled={snapshot.generalBusy}
-            />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
-            <div>
-              <p className="text-sm font-semibold text-zinc-950">Timezone</p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                Override the timezone used for the sidebar timeline
-              </p>
-            </div>
-            <SearchableSelect
-              ariaLabel="Timezone"
-              value={snapshot.generalDraft.timezone || systemTimezone}
-              onChange={(nextValue) => {
-                appStore.setTimezone(nextValue === systemTimezone ? "" : nextValue);
-              }}
-              options={timezoneOptions}
-              placeholder={`System default (${systemTimezone})`}
-              searchPlaceholder="Search timezone..."
-              disabled={snapshot.generalBusy}
-            />
-          </div>
-
-          <div>
-            <div>
-              <p className="text-sm font-semibold text-zinc-950">Spoken languages</p>
-              <p className="mt-1 text-sm leading-6 text-zinc-600">
-                Add other languages you use other than the main language
-              </p>
-            </div>
-            <div className="mt-4">
-              <SpokenLanguagesCombobox
-                mainLanguage={snapshot.generalDraft.mainLanguage}
-                value={snapshot.generalDraft.spokenLanguages}
-                disabled={snapshot.generalBusy}
-                onAdd={appStore.addSpokenLanguage}
-                onRemove={appStore.removeSpokenLanguage}
-              />
-            </div>
-          </div>
-        </CardPanel>
-      </Card>
-
-      {snapshot.generalNote ? (
-        <p className="text-sm text-rose-700">{snapshot.generalNote}</p>
-      ) : null}
-      {snapshot.summaryNote ? (
-        <p className="text-sm text-rose-700">{snapshot.summaryNote}</p>
-      ) : null}
-      {snapshot.permissionNote ? (
-        <p className="text-sm text-rose-700">{snapshot.permissionNote}</p>
-      ) : null}
+        </div>
+      </div>
     </section>
   );
 }
