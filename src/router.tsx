@@ -15,6 +15,7 @@ import {
   type MouseEvent,
   type ReactNode,
   useCallback,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -99,6 +100,32 @@ function IconClose() {
 
 function BrandWordmark({ className }: { className?: string }) {
   return <img src={brandWordmark} alt="unsigned {char}" className={cn("block h-9 w-auto", className)} />;
+}
+
+const AI_SUMMARIES_SETTINGS_SECTION = "ai-summaries";
+const AI_SUMMARIES_SETTINGS_SECTION_ID = "settings-ai-summaries";
+
+function readTargetSettingsSection() {
+  const queryIndex = window.location.hash.indexOf("?");
+
+  if (queryIndex < 0) {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.hash.slice(queryIndex + 1));
+  const section = params.get("section");
+
+  return section === AI_SUMMARIES_SETTINGS_SECTION ? AI_SUMMARIES_SETTINGS_SECTION : null;
+}
+
+function scrollSettingsSectionIntoView(section: string | null) {
+  if (section !== AI_SUMMARIES_SETTINGS_SECTION) {
+    return;
+  }
+
+  document
+    .getElementById(AI_SUMMARIES_SETTINGS_SECTION_ID)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function LiveIndicator({ className }: { className?: string }) {
@@ -1183,7 +1210,7 @@ function MeetingScreen() {
                 variant="secondary"
                 className="w-full justify-center border-white/10 bg-white/10 text-white hover:bg-white/16 data-pressed:bg-white/14"
                 onClick={() => {
-                  void appStore.openSettingsWindow();
+                  void appStore.openSettingsWindow(AI_SUMMARIES_SETTINGS_SECTION);
                 }}
               >
                 Open preferences
@@ -1298,11 +1325,42 @@ function MeetingScreen() {
 
 function SettingsScreen() {
   const snapshot = useAppState();
+  const settingsReady = Boolean(snapshot.generalSettings && snapshot.summarySettings && snapshot.modelSettings);
+  const [targetSettingsSection, setTargetSettingsSection] = useState<string | null>(() =>
+    readTargetSettingsSection(),
+  );
   const settingsLoadNote =
     snapshot.permissionNote || snapshot.generalNote || snapshot.summaryNote;
   const settingsContentWidthClass = isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]";
   const settingsShellHeightClass = isSettingsWindow ? "h-screen" : windowShellHeightClass;
   const settingsContentInsetClass = "px-5 pt-5 pb-6";
+
+  useEffect(() => {
+    const syncTargetSection = () => {
+      setTargetSettingsSection(readTargetSettingsSection());
+    };
+
+    syncTargetSection();
+    window.addEventListener("hashchange", syncTargetSection);
+
+    return () => {
+      window.removeEventListener("hashchange", syncTargetSection);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!settingsReady || targetSettingsSection !== AI_SUMMARIES_SETTINGS_SECTION) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollSettingsSectionIntoView(targetSettingsSection);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [settingsReady, targetSettingsSection]);
 
   if (!snapshot.generalSettings || !snapshot.summarySettings || !snapshot.modelSettings) {
     return (
@@ -1386,7 +1444,7 @@ function SettingsScreen() {
       <div className="relative -mx-4 min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
           <div className={cn("mx-auto flex flex-col gap-6", settingsContentWidthClass, settingsContentInsetClass)}>
-            <Card className="overflow-visible">
+            <Card id={AI_SUMMARIES_SETTINGS_SECTION_ID} className="overflow-visible">
               <CardHeader>
                 <CardTitle>Preferences</CardTitle>
                 <CardDescription>Language and timeline defaults for the local app.</CardDescription>

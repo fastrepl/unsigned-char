@@ -2459,9 +2459,9 @@ async function removeSummaryApiKey() {
   await saveSummarySettings({ clearApiKey: true });
 }
 
-async function openSettingsWindow() {
+async function openSettingsWindow(section?: "ai-summaries") {
   try {
-    await invoke("open_settings_window");
+    await invoke("open_settings_window", { section });
   } catch (error) {
     patch({
       meetingNote:

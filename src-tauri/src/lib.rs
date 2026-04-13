@@ -8,6 +8,7 @@ use std::{
     env,
     path::{Component, Path, PathBuf},
     sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use asr::{
@@ -464,8 +465,11 @@ fn open_permission_settings(permission: PermissionKind) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_settings_window<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
-    show_settings_window(&app).map_err(|error| error.to_string())
+fn open_settings_window<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    section: Option<String>,
+) -> Result<(), String> {
+    show_settings_window(&app, section.as_deref()).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1116,8 +1120,27 @@ fn build_app_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result
     )
 }
 
-fn show_settings_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
+fn settings_window_route(section: Option<&str>) -> String {
+    match section.filter(|value| !value.trim().is_empty()) {
+        Some(section) => format!(
+            "/settings?section={section}&nonce={}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.as_millis())
+                .unwrap_or(0)
+        ),
+        None => "/settings".to_string(),
+    }
+}
+
+fn show_settings_window<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    section: Option<&str>,
+) -> tauri::Result<()> {
+    let route = settings_window_route(section);
+
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
+        window.eval(&format!("window.location.hash = '#{route}'"))?;
         let _ = window.unminimize();
         window.show()?;
         window.set_focus()?;
@@ -1127,7 +1150,7 @@ fn show_settings_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::
     let builder = WebviewWindowBuilder::new(
         app,
         SETTINGS_WINDOW_LABEL,
-        WebviewUrl::App("index.html#/settings".into()),
+        WebviewUrl::App(format!("index.html#{route}").into()),
     )
     .title("Settings")
     .inner_size(560.0, 540.0)
@@ -2546,7 +2569,7 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             if event.id() == OPEN_SETTINGS_MENU_ID {
-                let _ = show_settings_window(app);
+                let _ = show_settings_window(app, None);
             }
         })
         .invoke_handler(tauri::generate_handler![
