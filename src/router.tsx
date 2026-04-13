@@ -681,8 +681,12 @@ function SpokenLanguagesCombobox({
 
 function RootLayout() {
   return (
-    <div className="isolate min-h-screen w-full text-zinc-900">
-      <WindowDragRegion className="h-10 w-full" />
+    <div className="relative isolate min-h-screen w-full text-zinc-900">
+      {isSettingsWindow ? (
+        <WindowDragRegion className="absolute inset-x-0 top-0 z-20 h-10 w-full" />
+      ) : (
+        <WindowDragRegion className="h-10 w-full" />
+      )}
       <div className="px-4">
         <Outlet />
       </div>
@@ -1194,10 +1198,14 @@ function SettingsScreen() {
   const settingsLoadNote =
     snapshot.permissionNote || snapshot.generalNote || snapshot.summaryNote;
   const settingsContentWidthClass = isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]";
+  const settingsShellHeightClass = isSettingsWindow ? "h-screen" : windowShellHeightClass;
+  const settingsContentInsetClass = isSettingsWindow
+    ? "px-5 pt-[calc(2.5rem+1.25rem)] pb-6"
+    : "px-5 pt-5 pb-6";
 
   if (!snapshot.generalSettings || !snapshot.summarySettings || !snapshot.modelSettings) {
     return (
-      <section className={cn("mx-auto flex items-center", settingsContentWidthClass, windowShellHeightClass)}>
+      <section className={cn("mx-auto flex items-center", settingsContentWidthClass, settingsShellHeightClass)}>
         <Card className="w-full">
           <CardHeader className="px-8 py-8">
             <CardTitle>{settingsLoadNote ? "Could not load settings" : "Loading preferences..."}</CardTitle>
@@ -1273,10 +1281,10 @@ function SettingsScreen() {
         : "Optional API key";
 
   return (
-    <section className={cn("flex min-h-0 flex-col", windowShellHeightClass)}>
+    <section className={cn("flex min-h-0 flex-col", settingsShellHeightClass)}>
       <div className="relative -mx-4 min-h-0 flex-1">
         <div className="h-full overflow-y-auto">
-          <div className={cn("mx-auto flex flex-col gap-6 px-5 pt-5 pb-6", settingsContentWidthClass)}>
+          <div className={cn("mx-auto flex flex-col gap-6", settingsContentWidthClass, settingsContentInsetClass)}>
             <Card className="overflow-visible">
               <CardHeader>
                 <CardTitle>Preferences</CardTitle>
