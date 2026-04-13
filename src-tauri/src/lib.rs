@@ -1158,6 +1158,10 @@ fn show_settings_window<R: tauri::Runtime>(
     .visible(false)
     .transparent(false)
     .resizable(true);
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
     let window = builder.build()?;
     window.show()?;
     window.set_focus()?;

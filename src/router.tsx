@@ -815,7 +815,11 @@ function RootLayout() {
       )}
     >
       {isSettingsWindow ? (
-        <WindowDragRegion className="absolute inset-x-0 top-0 z-20 h-10 w-full" />
+        <WindowDragRegion className="absolute inset-x-0 top-0 z-20 flex h-10 w-full items-center justify-center px-16">
+          <span className="pointer-events-none max-w-full select-none truncate text-[15px] font-semibold tracking-[-0.01em] text-zinc-800/90">
+            Settings
+          </span>
+        </WindowDragRegion>
       ) : (
         <WindowDragRegion className="h-10 w-full" />
       )}
