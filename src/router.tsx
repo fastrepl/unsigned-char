@@ -10,7 +10,17 @@ import {
 } from "@tanstack/react-router";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ChevronDown, ChevronLeft, CircleAlert, Cloud, Cpu, Ellipsis, Globe2, PlugZap, Users } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  CircleAlert,
+  Cloud,
+  Cpu,
+  Ellipsis,
+  Globe2,
+  PlugZap,
+  Users,
+} from "lucide-react";
 import {
   type CSSProperties,
   type MouseEvent,
@@ -110,6 +120,14 @@ function IconClose() {
         strokeWidth="1.4"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function IconStopSquare({ className }: { className?: string }) {
+  return (
+    <svg className={cn("size-3.5", className)} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <rect x="2.5" y="2.5" width="9" height="9" rx="2" fill="currentColor" />
     </svg>
   );
 }
@@ -1243,6 +1261,9 @@ function SpeakerLabelField({
 }) {
   const [draft, setDraft] = useState(speakerLabel);
   const [isEditing, setIsEditing] = useState(false);
+  const draftWidth: CSSProperties = {
+    width: `${Math.max(draft.length, speakerLabel.length, 6) + 1}ch`,
+  };
 
   const save = () => {
     appStore.updateMeetingSpeakerLabel(meetingId, speakerId, draft);
@@ -1256,7 +1277,9 @@ function SpeakerLabelField({
         autoFocus
         spellCheck={false}
         aria-label="Speaker label"
-        className="h-7 min-w-[7.5rem] rounded-[var(--radius-control-sm)] border border-[color:var(--border-strong)] bg-[color:var(--card)] px-2 text-[11px] font-semibold normal-case tracking-[0.04em] text-zinc-800 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
+        title="Rename this speaker across the transcript"
+        className="-ml-1.5 h-7 min-w-0 appearance-none rounded-[var(--radius-control-sm)] border-0 bg-transparent px-1.5 py-1 text-[11px] font-semibold normal-case tracking-[0.08em] text-zinc-700 outline-none"
+        style={draftWidth}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={save}
         onKeyDown={(event) => {
@@ -1518,7 +1541,7 @@ function MeetingScreen() {
           variant={isStoppingMeeting ? "outline" : meeting.status === "live" ? "destructive" : "outline"}
           className={cn(
             "w-full min-w-0 justify-self-stretch",
-            meeting.status === "live" && !isStoppingMeeting && "text-white",
+            meeting.status === "live" && !isStoppingMeeting && "text-white *:data-[slot=button-loading-indicator]:text-white",
           )}
           disabled={snapshot.transcriptionBusy}
           loading={isStoppingMeeting}
@@ -1533,8 +1556,8 @@ function MeetingScreen() {
               "Starting listening"
             ) : (
               <>
-                <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px] bg-current" />
-                <span>Stop listening</span>
+                <IconStopSquare className="text-white" />
+                <span className="text-white">Stop listening</span>
               </>
             )
           ) : (
