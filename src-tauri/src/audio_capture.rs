@@ -21,6 +21,11 @@ const ECHO_CORRELATION_THRESHOLD: f32 = 0.65;
 const ECHO_MIN_GAIN: f32 = 0.08;
 const ECHO_MAX_GAIN: f32 = 1.25;
 const ECHO_SIGNAL_FLOOR: f32 = 0.001;
+const ECHO_MUTE_CORRELATION_THRESHOLD: f32 = 0.8;
+const ECHO_MUTE_EXPLAINED_RATIO: f32 = 0.72;
+const ECHO_MUTE_RESIDUAL_RATIO: f32 = 0.12;
+const ECHO_DUCK_RESIDUAL_RATIO: f32 = 0.32;
+const ECHO_RESIDUAL_CORRELATION_THRESHOLD: f32 = 0.45;
 const SESSION_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const SYSTEM_AUDIO_DEVICE_NAME: &str = "unsigned char meeting system audio";
 
@@ -323,6 +328,22 @@ impl EchoReducer {
                 .clamp(-1.0, 1.0);
         }
 
+        let overlap = estimate.mic_start..estimate.mic_start + estimate.overlap_len;
+        let speaker_overlap = &self.speaker_history
+            [estimate.speaker_start..estimate.speaker_start + estimate.overlap_len];
+        let cleaned_overlap = &cleaned[overlap.clone()];
+        let residual_ratio = signal_energy(cleaned_overlap) / estimate.mic_energy;
+        let residual_correlation = normalized_correlation(cleaned_overlap, speaker_overlap);
+
+        if estimate.correlation >= ECHO_MUTE_CORRELATION_THRESHOLD
+            && estimate.explained_ratio >= ECHO_MUTE_EXPLAINED_RATIO
+            && (residual_ratio <= ECHO_MUTE_RESIDUAL_RATIO
+                || (residual_ratio <= ECHO_DUCK_RESIDUAL_RATIO
+                    && residual_correlation >= ECHO_RESIDUAL_CORRELATION_THRESHOLD))
+        {
+            cleaned[overlap].fill(0.0);
+        }
+
         if signal_rms(&cleaned) >= mic_rms {
             return mic.to_vec();
         }
@@ -372,8 +393,7 @@ impl EchoReducer {
                 continue;
             }
 
-            let correlation =
-                dot_product(mic_slice, speaker_slice) / (mic_energy.sqrt() * speaker_energy.sqrt());
+            let correlation = normalized_correlation(mic_slice, speaker_slice);
             if !correlation.is_finite() || correlation <= 0.0 {
                 continue;
             }
@@ -385,6 +405,8 @@ impl EchoReducer {
                 mic_start,
                 speaker_start,
                 overlap_len: available,
+                mic_energy,
+                explained_ratio: (gain * gain * speaker_energy) / mic_energy,
             };
 
             match best {
@@ -404,10 +426,22 @@ struct EchoEstimate {
     mic_start: usize,
     speaker_start: usize,
     overlap_len: usize,
+    mic_energy: f32,
+    explained_ratio: f32,
 }
 
 fn dot_product(left: &[f32], right: &[f32]) -> f32 {
     left.iter().zip(right.iter()).map(|(a, b)| a * b).sum()
+}
+
+fn normalized_correlation(left: &[f32], right: &[f32]) -> f32 {
+    let left_energy = signal_energy(left);
+    let right_energy = signal_energy(right);
+    if left_energy <= 0.0 || right_energy <= 0.0 {
+        return 0.0;
+    }
+
+    dot_product(left, right) / (left_energy.sqrt() * right_energy.sqrt())
 }
 
 fn signal_energy(samples: &[f32]) -> f32 {
@@ -590,7 +624,9 @@ impl LinearResampler {
 
 #[cfg(test)]
 mod tests {
-    use super::{signal_rms, EchoReducer, LinearResampler, OUTPUT_CHUNK_SIZE};
+    use super::{
+        normalized_correlation, signal_rms, EchoReducer, LinearResampler, OUTPUT_CHUNK_SIZE,
+    };
 
     #[test]
     fn linear_resampler_does_not_drain_past_buffer_when_downsampling() {
@@ -630,6 +666,25 @@ mod tests {
         assert!(signal_rms(&cleaned_tail) > signal_rms(&mic_tail) * 0.9);
     }
 
+    #[test]
+    fn echo_reducer_keeps_voice_when_nearfield_speech_overlaps_system_audio() {
+        let mut reducer = EchoReducer::new();
+        let speaker = test_tone(OUTPUT_CHUNK_SIZE * 2, 0.57, 0.33);
+        let voice_head = voice_chunk(0, 0.91, 0.23);
+        let voice_tail = voice_chunk(OUTPUT_CHUNK_SIZE, 0.91, 0.23);
+        let mic_head = sum_audio(&delayed_mix(&speaker, 0, 180, 0.72, 0.0, 0.0), &voice_head);
+        let mic_tail = sum_audio(
+            &delayed_mix(&speaker, OUTPUT_CHUNK_SIZE, 180, 0.72, 0.0, 0.0),
+            &voice_tail,
+        );
+
+        let _ = reducer.reduce(&mic_head, &speaker[..OUTPUT_CHUNK_SIZE]);
+        let cleaned_tail = reducer.reduce(&mic_tail, &speaker[OUTPUT_CHUNK_SIZE..]);
+
+        assert!(signal_rms(&cleaned_tail) > signal_rms(&voice_tail) * 0.6);
+        assert!(normalized_correlation(&cleaned_tail, &voice_tail) > 0.7);
+    }
+
     fn delayed_mix(
         speaker: &[f32],
         start: usize,
@@ -662,6 +717,23 @@ mod tests {
             .map(|index| {
                 ((index as f32 * freq_a).sin() * 0.55) + ((index as f32 * freq_b).cos() * 0.35)
             })
+            .collect()
+    }
+
+    fn voice_chunk(start: usize, freq_a: f32, freq_b: f32) -> Vec<f32> {
+        (0..OUTPUT_CHUNK_SIZE)
+            .map(|index| {
+                let absolute_index = start + index;
+                ((absolute_index as f32 * freq_a).sin() * 0.25)
+                    + ((absolute_index as f32 * freq_b).cos() * 0.18)
+            })
+            .collect()
+    }
+
+    fn sum_audio(left: &[f32], right: &[f32]) -> Vec<f32> {
+        left.iter()
+            .zip(right.iter())
+            .map(|(a, b)| (a + b).clamp(-1.0, 1.0))
             .collect()
     }
 }

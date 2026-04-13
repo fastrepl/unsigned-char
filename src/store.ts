@@ -698,6 +698,32 @@ function longestCommonSubsequenceLength(left: string[], right: string[]) {
   return previous[right.length];
 }
 
+function longestCommonTokenSpanLength(left: string[], right: string[]) {
+  if (left.length === 0 || right.length === 0) {
+    return 0;
+  }
+
+  const previous = new Array<number>(right.length + 1).fill(0);
+  const current = new Array<number>(right.length + 1).fill(0);
+  let longest = 0;
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      if (left[leftIndex - 1] === right[rightIndex - 1]) {
+        current[rightIndex] = previous[rightIndex - 1] + 1;
+        longest = Math.max(longest, current[rightIndex]);
+      } else {
+        current[rightIndex] = 0;
+      }
+    }
+
+    previous.splice(0, previous.length, ...current);
+    current.fill(0);
+  }
+
+  return longest;
+}
+
 function transcriptEntriesSubstantiallyOverlap(left: TranscriptEntry, right: TranscriptEntry) {
   const leftTokens = transcriptComparisonTokens(left.text);
   const rightTokens = transcriptComparisonTokens(right.text);
@@ -716,13 +742,23 @@ function transcriptEntriesCloselyMatchAcrossSources(left: TranscriptEntry, right
   const rightTokens = transcriptComparisonTokens(right.text);
   const shorterLength = Math.min(leftTokens.length, rightTokens.length);
   const longerLength = Math.max(leftTokens.length, rightTokens.length);
+  const lcsLength = longestCommonSubsequenceLength(leftTokens, rightTokens);
+  const contiguousSpanLength = longestCommonTokenSpanLength(leftTokens, rightTokens);
 
   if (shorterLength < 6 || shorterLength / longerLength < 0.82) {
-    return false;
+    return (
+      shorterLength >= 6 &&
+      contiguousSpanLength >= 8 &&
+      lcsLength / shorterLength >= 0.68 &&
+      contiguousSpanLength / shorterLength >= 0.55
+    );
   }
 
-  const lcsLength = longestCommonSubsequenceLength(leftTokens, rightTokens);
-  return lcsLength / longerLength >= 0.88;
+  if (lcsLength / longerLength >= 0.88) {
+    return true;
+  }
+
+  return lcsLength / shorterLength >= 0.78 && contiguousSpanLength / shorterLength >= 0.55;
 }
 
 function preferredTranscriptEntry(left: TranscriptEntry, right: TranscriptEntry) {
@@ -739,6 +775,16 @@ function preferredTranscriptEntry(left: TranscriptEntry, right: TranscriptEntry)
 function preferredCrossSourceTranscriptEntry(left: TranscriptEntry, right: TranscriptEntry) {
   const leftLength = transcriptComparisonTokens(left.text).length;
   const rightLength = transcriptComparisonTokens(right.text).length;
+
+  if (Math.abs(leftLength - rightLength) <= 2) {
+    if (left.source === "system" && right.source !== "system") {
+      return left;
+    }
+
+    if (right.source === "system" && left.source !== "system") {
+      return right;
+    }
+  }
 
   if (rightLength >= leftLength * 1.2) {
     return right;
