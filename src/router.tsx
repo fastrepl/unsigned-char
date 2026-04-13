@@ -112,6 +112,15 @@ function BrandWordmark({ className }: { className?: string }) {
 
 const AI_SUMMARIES_SETTINGS_SECTION = "ai-summaries";
 const AI_SUMMARIES_SETTINGS_SECTION_ID = "settings-ai-summaries";
+const TRANSCRIPTION_MODEL_SETTINGS_SECTION = "transcription-model";
+const TRANSCRIPTION_MODEL_SETTINGS_SECTION_ID = "settings-transcription-model";
+
+const SETTINGS_SECTION_IDS = {
+  [AI_SUMMARIES_SETTINGS_SECTION]: AI_SUMMARIES_SETTINGS_SECTION_ID,
+  [TRANSCRIPTION_MODEL_SETTINGS_SECTION]: TRANSCRIPTION_MODEL_SETTINGS_SECTION_ID,
+} as const;
+
+type SettingsSection = keyof typeof SETTINGS_SECTION_IDS;
 
 function readTargetSettingsSection() {
   const queryIndex = window.location.hash.indexOf("?");
@@ -123,17 +132,15 @@ function readTargetSettingsSection() {
   const params = new URLSearchParams(window.location.hash.slice(queryIndex + 1));
   const section = params.get("section");
 
-  return section === AI_SUMMARIES_SETTINGS_SECTION ? AI_SUMMARIES_SETTINGS_SECTION : null;
+  return section && section in SETTINGS_SECTION_IDS ? (section as SettingsSection) : null;
 }
 
-function scrollSettingsSectionIntoView(section: string | null) {
-  if (section !== AI_SUMMARIES_SETTINGS_SECTION) {
+function scrollSettingsSectionIntoView(section: SettingsSection | null) {
+  if (!section) {
     return;
   }
 
-  document
-    .getElementById(AI_SUMMARIES_SETTINGS_SECTION_ID)
-    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById(SETTINGS_SECTION_IDS[section])?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function LiveIndicator({ className }: { className?: string }) {
@@ -1070,18 +1077,32 @@ function HomeScreen() {
                   <CardFooter className="border-t-0 pt-0">
                     <ModelDownloadGauge busy={snapshot.modelBusy} download={snapshot.modelDownload} />
                   </CardFooter>
-                ) : setupBanner.actionLabel ? (
+                ) : setupBanner.actionLabel || setupBanner.secondaryActionLabel ? (
                   <CardFooter className="border-t-0 pt-0">
-                    <Button
-                      disabled={snapshot.modelBusy}
-                      onClick={() => {
-                        void appStore.startManagedModelDownload();
-                      }}
-                    >
-                      <span className="text-white">
-                        {snapshot.modelBusy ? "Starting download..." : setupBanner.actionLabel}
-                      </span>
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      {setupBanner.actionLabel ? (
+                        <Button
+                          disabled={snapshot.modelBusy}
+                          onClick={() => {
+                            void appStore.startManagedModelDownload();
+                          }}
+                        >
+                          <span className="text-white">
+                            {snapshot.modelBusy ? "Starting download..." : setupBanner.actionLabel}
+                          </span>
+                        </Button>
+                      ) : null}
+                      {setupBanner.secondaryActionLabel ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            void appStore.openSettingsWindow(TRANSCRIPTION_MODEL_SETTINGS_SECTION);
+                          }}
+                        >
+                          {setupBanner.secondaryActionLabel}
+                        </Button>
+                      ) : null}
+                    </div>
                   </CardFooter>
                 ) : null}
               </Card>
@@ -1565,7 +1586,7 @@ function MeetingScreen() {
 function SettingsScreen() {
   const snapshot = useAppState();
   const settingsReady = Boolean(snapshot.generalSettings && snapshot.summarySettings && snapshot.modelSettings);
-  const [targetSettingsSection, setTargetSettingsSection] = useState<string | null>(() =>
+  const [targetSettingsSection, setTargetSettingsSection] = useState<SettingsSection | null>(() =>
     readTargetSettingsSection(),
   );
   const [settingsScrollTop, setSettingsScrollTop] = useState(0);
@@ -1601,7 +1622,7 @@ function SettingsScreen() {
   }, []);
 
   useEffect(() => {
-    if (!settingsReady || targetSettingsSection !== AI_SUMMARIES_SETTINGS_SECTION) {
+    if (!settingsReady || !targetSettingsSection) {
       return;
     }
 
@@ -1720,7 +1741,7 @@ function SettingsScreen() {
           }}
         >
           <div className={cn("mx-auto flex flex-col gap-6", settingsContentWidthClass, settingsContentInsetClass)}>
-            <Card id={AI_SUMMARIES_SETTINGS_SECTION_ID} className="overflow-visible">
+            <Card className="overflow-visible">
               <CardHeader className="pb-2">
                 <CardTitle>General</CardTitle>
               </CardHeader>
@@ -1766,7 +1787,7 @@ function SettingsScreen() {
               </CardPanel>
             </Card>
 
-            <Card className="overflow-visible">
+            <Card id={TRANSCRIPTION_MODEL_SETTINGS_SECTION_ID} className="overflow-visible">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2.5">
                   <CardTitle>Transcription model</CardTitle>
@@ -1873,7 +1894,7 @@ function SettingsScreen() {
               </CardPanel>
             </Card>
 
-            <Card className="overflow-visible">
+            <Card id={AI_SUMMARIES_SETTINGS_SECTION_ID} className="overflow-visible">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2.5">
                   <CardTitle>AI summaries</CardTitle>

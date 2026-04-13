@@ -225,6 +225,7 @@ type SetupBannerContent = {
   copy: string;
   detail: string;
   actionLabel: string | null;
+  secondaryActionLabel: string | null;
 } | null;
 
 const STORE_KEY = "unsigned-char-meetings";
@@ -1043,6 +1044,7 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
       copy: `unsigned {char} is downloading ${selectedModelLabel} and storing it locally on this Mac.`,
       detail: progress,
       actionLabel: null,
+      secondaryActionLabel: null,
     };
   }
 
@@ -1053,6 +1055,7 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
       copy: download.error ?? "The model download did not complete.",
       detail: "Retry to finish local transcription setup.",
       actionLabel: "Retry download",
+      secondaryActionLabel: "Choose another model",
     };
   }
 
@@ -1062,6 +1065,7 @@ export function currentSetupBannerContent(snapshot: AppState): SetupBannerConten
     copy: `Download ${selectedModelLabel} once to run ${modeCopy} locally. The model is cached on this device.`,
     detail: snapshot.modelSettings.selectedModelDetail,
     actionLabel: "Download model",
+    secondaryActionLabel: "Choose another model",
   };
 }
 
@@ -2491,7 +2495,7 @@ async function removeSummaryApiKey() {
   await saveSummarySettings({ clearApiKey: true });
 }
 
-async function openSettingsWindow(section?: "ai-summaries") {
+async function openSettingsWindow(section?: "ai-summaries" | "transcription-model") {
   try {
     await invoke("open_settings_window", { section });
   } catch (error) {
