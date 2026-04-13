@@ -10,13 +10,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "desktop": "tauri build --debug --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}' && RUST_BACKTRACE=1 'src-tauri/target/debug/bundle/macos/unsigned Char.app/Contents/MacOS/unsigned-char'",
+    "desktop": "tauri build --debug --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}' && open 'src-tauri/target/debug/bundle/macos/unsigned Char.app'",
     "desktop:open": "tauri build --debug --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}' && open 'src-tauri/target/debug/bundle/macos/unsigned Char.app'",
     "desktop:dev": "tauri dev",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:debug-app": "tauri build --debug --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}' && RUST_BACKTRACE=1 'src-tauri/target/debug/bundle/macos/unsigned Char.app/Contents/MacOS/unsigned-char'"
+    "tauri:debug-app": "tauri build --debug --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}' && open 'src-tauri/target/debug/bundle/macos/unsigned Char.app'"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
