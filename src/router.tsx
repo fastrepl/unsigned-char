@@ -1692,21 +1692,6 @@ function SettingsScreen() {
                   </div>
                 </div>
 
-                {selectedSummaryProvider?.help ? (
-                  <div className={cn(insetPanelClass, "space-y-2")}>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                      Provider notes
-                    </p>
-                    <p className="text-sm leading-6 text-zinc-600">{selectedSummaryProvider.help}</p>
-                    {snapshot.summaryDraft.provider ? (
-                      <code className="block break-all text-xs text-zinc-700">
-                        {snapshot.summaryDraft.baseUrl.trim() ||
-                          selectedSummaryProvider.defaultBaseUrl ||
-                          "Custom base URL required"}
-                      </code>
-                    ) : null}
-                  </div>
-                ) : null}
               </CardPanel>
               <CardFooter className="justify-between">
                 <p className="text-sm text-zinc-500">{snapshot.summarySettings.status}</p>
