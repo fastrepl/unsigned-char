@@ -1700,7 +1700,6 @@ function SettingsScreen() {
         ? "ready"
         : "needs setup";
   const modelStatusActive = downloadStatus === "downloading" || modelReady;
-  const setupBanner = currentSetupBannerContent(snapshot);
   const selectedModel = modelSettings.availableModels.find(
     (option) => option.id === modelSettings.selectedModelId,
   );
@@ -1723,9 +1722,6 @@ function SettingsScreen() {
           : [option.languagesLabel],
     }));
   const selectedBatchSupportsRealtime = batchModelSupportsRealtime(modelSettings.batchModelId);
-  const recommendedModel = modelSettings.availableModels.find(
-    (option) => option.id === modelSettings.recommendedModelId,
-  );
   const selectedSummaryProvider = getSummaryProviderDefinition(snapshot.summaryDraft.provider);
   const summaryStatusLabel = !snapshot.summarySettings.provider
     ? "off"
@@ -1821,17 +1817,42 @@ function SettingsScreen() {
               <CardPanel className="grid gap-6 pt-0">
                 <div className="grid gap-3">
                   <p className="text-sm font-semibold text-zinc-950">Model</p>
-                  <SearchableSelect
-                    ariaLabel="Model"
-                    value={snapshot.modelSettings.batchModelId}
-                    onChange={(nextValue) => {
-                      appStore.setBatchModel(nextValue as typeof snapshot.modelSettings.batchModelId);
-                    }}
-                    options={batchModelOptions}
-                    placeholder="Select model"
-                    searchPlaceholder="Search model..."
-                    disabled={snapshot.modelBusy || downloadStatus === "downloading"}
-                  />
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-start gap-3">
+                      <SearchableSelect
+                        ariaLabel="Model"
+                        value={snapshot.modelSettings.batchModelId}
+                        onChange={(nextValue) => {
+                          appStore.setBatchModel(nextValue as typeof snapshot.modelSettings.batchModelId);
+                        }}
+                        options={batchModelOptions}
+                        placeholder="Select model"
+                        searchPlaceholder="Search model..."
+                        disabled={snapshot.modelBusy || downloadStatus === "downloading"}
+                        className="min-w-0 flex-1"
+                      />
+                      {!modelReady && !showModelDownloadGauge ? (
+                        <Button
+                          className="shrink-0"
+                          disabled={snapshot.modelBusy}
+                          onClick={() => {
+                            void appStore.startManagedModelDownload();
+                          }}
+                        >
+                          Download model
+                        </Button>
+                      ) : null}
+                    </div>
+
+                    {showModelDownloadGauge ? (
+                      <ModelDownloadGauge busy={snapshot.modelBusy} download={snapshot.modelDownload} />
+                    ) : null}
+
+                    <p className="text-sm text-zinc-500">
+                      {selectedModel?.detail} · {snapshot.modelSettings.selectedModelLanguagesLabel} ·{" "}
+                      {snapshot.modelSettings.selectedModelSizeLabel}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid gap-3">
@@ -1844,77 +1865,6 @@ function SettingsScreen() {
                   />
                 </div>
 
-                <div className={cn(insetPanelClass, "space-y-3")}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                        Active model
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-zinc-950">
-                        {snapshot.modelSettings.selectedModelLabel}
-                      </p>
-                    </div>
-                    <Badge variant="secondary">
-                      {snapshot.modelSettings.deviceProfile.chipLabel} · {snapshot.modelSettings.deviceProfile.memoryGb} GB
-                    </Badge>
-                  </div>
-
-                  <p className="text-sm leading-6 text-zinc-600">
-                    {modelReady
-                      ? snapshot.modelSettings.selectedModelStatus
-                      : setupBanner?.copy ?? snapshot.modelSettings.selectedModelStatus}
-                  </p>
-
-                  <p className="text-sm text-zinc-500">
-                    {selectedModel?.detail} · {snapshot.modelSettings.selectedModelLanguagesLabel} ·{" "}
-                    {snapshot.modelSettings.selectedModelSizeLabel}
-                  </p>
-
-                  {!modelReady ? (
-                    <div className="rounded-[calc(var(--radius)-6px)] border border-amber-200 bg-amber-50/80 px-3 py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <Badge variant="warning">Download required</Badge>
-                          <p className="text-sm leading-6 text-amber-900">
-                            Download {snapshot.modelSettings.selectedModelLabel} to use this selection locally.
-                          </p>
-                        </div>
-                        {!showModelDownloadGauge ? (
-                          <Button
-                            disabled={snapshot.modelBusy}
-                            onClick={() => {
-                              void appStore.startManagedModelDownload();
-                            }}
-                          >
-                            Download model
-                          </Button>
-                        ) : null}
-                      </div>
-
-                      {showModelDownloadGauge ? (
-                        <div className="mt-3">
-                          <ModelDownloadGauge busy={snapshot.modelBusy} download={snapshot.modelDownload} />
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <div className="rounded-[calc(var(--radius)-6px)] border border-[color:var(--border)] bg-white/70 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                      Recommendation
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-950">
-                      {recommendedModel?.label ?? snapshot.modelSettings.selectedModelLabel}
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-zinc-600">
-                      {snapshot.modelSettings.recommendationReason}
-                    </p>
-                  </div>
-
-                  {setupBanner?.detail ? (
-                    <p className="text-sm text-zinc-500">{setupBanner.detail}</p>
-                  ) : null}
-                </div>
               </CardPanel>
             </Card>
 
