@@ -1165,6 +1165,14 @@ function queueMeetingAutoDiarization(meetingId: string) {
     return;
   }
 
+  if (state.onboarding?.runningInsideAppBundle === false) {
+    patch({
+      meetingNote:
+        "Auto-diarization is disabled in `bun desktop:dev`. Run `bun desktop` so the bundled app can process the meeting after it ends.",
+    });
+    return;
+  }
+
   if (pendingAutoDiarizationRuns.some((candidate) => candidate.meetingId === meetingId)) {
     return;
   }
@@ -1503,6 +1511,12 @@ async function ensureDiarizationReady() {
 
   if (!state.diarizationSettings) {
     throw new Error("Diarization settings are still loading.");
+  }
+
+  if (state.onboarding?.runningInsideAppBundle === false) {
+    throw new Error(
+      "Speaker diarization is only enabled in the bundled app right now. Run `bun desktop` instead of `bun desktop:dev`.",
+    );
   }
 
   if (state.diarizationSettings.ready) {
