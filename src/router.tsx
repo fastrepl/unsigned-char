@@ -503,7 +503,7 @@ function DeleteMeetingDialog({
 
 const insetPanelClass =
   "rounded-[calc(var(--radius)-4px)] border border-[color:var(--border)] bg-[color:var(--secondary)] px-4 py-3";
-const windowShellHeightClass = "h-full min-h-0";
+const windowShellHeightClass = "h-full";
 const appWindow = getCurrentWindow();
 const isMainWindow = appWindow.label === "main";
 
@@ -515,8 +515,8 @@ function MainWindowCharBanner() {
   }
 
   return (
-    <div className="shrink-0 px-4 pt-3 pb-4">
-      <div className="mx-auto max-w-[780px] rounded-[calc(var(--radius)+2px)] border border-zinc-950 bg-zinc-950 px-4 py-4 text-white shadow-[0_1px_2px_rgba(15,23,42,0.08),0_20px_44px_rgba(15,23,42,0.18)]">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-4">
+      <div className="pointer-events-auto mx-auto max-w-[780px] rounded-[calc(var(--radius)+2px)] border border-zinc-950 bg-zinc-950 px-4 py-4 text-white shadow-[0_1px_2px_rgba(15,23,42,0.08),0_20px_44px_rgba(15,23,42,0.18)]">
         <div className="min-w-0">
           <span className="min-w-0">
             <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">
@@ -936,7 +936,7 @@ function RootLayout() {
   return (
     <div
       className={cn(
-        "relative isolate flex h-full min-h-0 w-full flex-col overflow-hidden text-zinc-900",
+        "relative isolate flex min-h-screen w-full flex-col text-zinc-900",
         isSettingsWindow && "bg-[linear-gradient(180deg,#fcfcfa_0%,var(--background)_48%,#f2f4f8_100%)]",
       )}
     >
@@ -945,7 +945,7 @@ function RootLayout() {
       ) : (
         <WindowDragRegion className="h-10 w-full shrink-0" />
       )}
-      <div className={cn("min-h-0 flex-1 overflow-hidden", isSettingsWindow ? "px-0" : "px-4")}>
+      <div className={cn("min-h-0 flex-1", isSettingsWindow ? "px-0" : "px-4")}>
         <Outlet />
       </div>
       {isMainWindow ? <MainWindowCharBanner /> : null}
