@@ -413,11 +413,28 @@ function isMeetingDeleteDisabled(
   );
 }
 
+function isMeetingDiarizationDisabled(
+  meeting: Meeting,
+  transcriptionBusy: boolean,
+  transcriptionRunning: boolean,
+  recordingMeetingId: string | null,
+  diarizationRunBusy: boolean,
+) {
+  return (
+    diarizationRunBusy ||
+    transcriptionBusy ||
+    !meeting.audioPath.trim() ||
+    recordingMeetingId === meeting.id ||
+    (meeting.status === "live" && transcriptionRunning)
+  );
+}
+
 type DeleteMeetingRequest = Pick<Meeting, "id" | "title">;
 
 function getMeetingActionMenuItems(
   meeting: Meeting,
   deleteDisabled: boolean,
+  diarizationDisabled: boolean,
   onDeleteRequested: (meeting: DeleteMeetingRequest) => void,
 ): MenuItemDef[] {
   return [
@@ -426,6 +443,14 @@ function getMeetingActionMenuItems(
       text: "Show in Finder",
       action: () => {
         void appStore.revealMeetingExportInFinder(meeting.id);
+      },
+    },
+    {
+      id: `rerun-meeting-diarization-${meeting.id}`,
+      text: "Diarize again",
+      disabled: diarizationDisabled,
+      action: () => {
+        void appStore.runMeetingDiarization(meeting.id);
       },
     },
     { separator: true },
@@ -1081,6 +1106,13 @@ function HomeScreen() {
                     snapshot.transcriptionRunning,
                     snapshot.recordingMeetingId,
                   );
+                  const diarizationDisabled = isMeetingDiarizationDisabled(
+                    meeting,
+                    snapshot.transcriptionBusy,
+                    snapshot.transcriptionRunning,
+                    snapshot.recordingMeetingId,
+                    snapshot.diarizationRunBusy,
+                  );
 
                   return (
                     <div key={meeting.id} className="relative">
@@ -1098,7 +1130,12 @@ function HomeScreen() {
                           }}
                           onContextMenu={(event) => {
                             void showNativeContextMenu(
-                              getMeetingActionMenuItems(meeting, deleteDisabled, setMeetingPendingDelete),
+                              getMeetingActionMenuItems(
+                                meeting,
+                                deleteDisabled,
+                                diarizationDisabled,
+                                setMeetingPendingDelete,
+                              ),
                               event,
                             );
                           }}
@@ -1231,6 +1268,13 @@ function MeetingScreen() {
     snapshot.transcriptionRunning,
     snapshot.recordingMeetingId,
   );
+  const diarizationDisabled = isMeetingDiarizationDisabled(
+    meeting,
+    snapshot.transcriptionBusy,
+    snapshot.transcriptionRunning,
+    snapshot.recordingMeetingId,
+    snapshot.diarizationRunBusy,
+  );
   const isStartingMeeting =
     meeting.status === "live" &&
     snapshot.startMeetingBusy &&
@@ -1323,7 +1367,12 @@ function MeetingScreen() {
                 const rect = event.currentTarget.getBoundingClientRect();
 
                 void showNativeMenu(
-                  getMeetingActionMenuItems(meeting, deleteDisabled, setMeetingPendingDelete),
+                  getMeetingActionMenuItems(
+                    meeting,
+                    deleteDisabled,
+                    diarizationDisabled,
+                    setMeetingPendingDelete,
+                  ),
                   {
                     event,
                     at: {
