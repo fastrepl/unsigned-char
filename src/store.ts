@@ -233,6 +233,7 @@ const LIVE_TRANSCRIPTION_STOP_WAIT_MS = 250;
 const MODEL_DOWNLOAD_POLL_MS = 1000;
 const MODEL_DOWNLOAD_START_GRACE_MS = 4000;
 const MEETING_MARKDOWN_SYNC_MS = 250;
+const SUMMARY_AUTOSAVE_MS = 500;
 const MARKDOWN_SAVE_ERROR_PREFIX = "Markdown save failed:";
 const liveTranscriptionPermissionKinds: PermissionKind[] = ["microphone", "systemAudio"];
 type PendingAutoDiarization = {
@@ -243,6 +244,7 @@ type PendingAutoDiarization = {
 const pendingAutoDiarizationRuns: PendingAutoDiarization[] = [];
 let autoDiarizationDrainRunning = false;
 let modelDownloadStartDeadline = 0;
+let summaryAutosaveTimer: number | null = null;
 
 export const currentWindow = getCurrentWindow();
 export const isSettingsWindow = currentWindow.label === SETTINGS_WINDOW_LABEL;
@@ -2143,6 +2145,11 @@ async function saveModelSettings(
 }
 
 async function saveSummarySettings(options?: { clearApiKey?: boolean }) {
+  if (summaryAutosaveTimer !== null) {
+    window.clearTimeout(summaryAutosaveTimer);
+    summaryAutosaveTimer = null;
+  }
+
   if (state.summaryBusy) {
     return;
   }
@@ -2176,6 +2183,17 @@ async function saveSummarySettings(options?: { clearApiKey?: boolean }) {
   } finally {
     patch({ summaryBusy: false });
   }
+}
+
+function queueSummaryAutosave(delay = SUMMARY_AUTOSAVE_MS) {
+  if (summaryAutosaveTimer !== null) {
+    window.clearTimeout(summaryAutosaveTimer);
+  }
+
+  summaryAutosaveTimer = window.setTimeout(() => {
+    summaryAutosaveTimer = null;
+    void saveSummarySettings();
+  }, delay);
 }
 
 async function startManagedModelDownload() {
@@ -2412,6 +2430,7 @@ function setSummaryProvider(provider: string) {
     },
     summaryNote: "",
   });
+  queueSummaryAutosave(0);
 }
 
 function setSummaryModel(model: string) {
@@ -2422,6 +2441,7 @@ function setSummaryModel(model: string) {
     },
     summaryNote: "",
   });
+  queueSummaryAutosave();
 }
 
 function setSummaryBaseUrl(baseUrl: string) {
@@ -2432,6 +2452,7 @@ function setSummaryBaseUrl(baseUrl: string) {
     },
     summaryNote: "",
   });
+  queueSummaryAutosave();
 }
 
 function setSummaryApiKey(apiKey: string) {
@@ -2444,9 +2465,15 @@ function setSummaryApiKey(apiKey: string) {
     },
     summaryNote: "",
   });
+  queueSummaryAutosave();
 }
 
 async function removeSummaryApiKey() {
+  if (summaryAutosaveTimer !== null) {
+    window.clearTimeout(summaryAutosaveTimer);
+    summaryAutosaveTimer = null;
+  }
+
   patch({
     summaryDraft: {
       ...state.summaryDraft,
@@ -2577,7 +2604,6 @@ export const appStore = {
   setSummaryModel,
   setSummaryBaseUrl,
   setSummaryApiKey,
-  saveSummarySettings,
   removeSummaryApiKey,
   openSettingsWindow,
   refreshSettingsWindowData,

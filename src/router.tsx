@@ -1453,6 +1453,11 @@ function SettingsScreen() {
     snapshot.summaryDraft.model.trim() !== snapshot.summarySettings.model.trim() ||
     snapshot.summaryDraft.baseUrl.trim() !== snapshot.summarySettings.baseUrl.trim() ||
     snapshot.summaryDraft.apiKeyDirty;
+  const summaryFooterText = snapshot.summaryNote
+    ? "Could not save changes."
+    : snapshot.summaryBusy || summarySettingsDirty
+      ? "Saving changes..."
+      : snapshot.summarySettings.status;
   const apiKeyPlaceholder =
     snapshot.summaryDraft.apiKeyPresent && !snapshot.summaryDraft.apiKeyDirty
       ? "API key saved"
@@ -1732,17 +1737,8 @@ function SettingsScreen() {
                 </div>
 
               </CardPanel>
-              <CardFooter className="justify-between">
-                <p className="text-sm text-zinc-500">{snapshot.summarySettings.status}</p>
-                <Button
-                  disabled={snapshot.summaryBusy || !summarySettingsDirty}
-                  loading={snapshot.summaryBusy}
-                  onClick={() => {
-                    void appStore.saveSummarySettings();
-                  }}
-                >
-                  Save summary settings
-                </Button>
+              <CardFooter>
+                <p className="text-sm text-zinc-500">{summaryFooterText}</p>
               </CardFooter>
             </Card>
 
