@@ -42,24 +42,3 @@ If you want `uchar` on your `PATH`:
 ```bash
 ln -sf "/Applications/unsigned char.app/Contents/MacOS/uchar" /opt/homebrew/bin/uchar
 ```
-
-## Release
-
-OTA updates are served from GitHub Releases via `latest.json`.
-
-First-time setup:
-
-```bash
-bunx tauri signer generate -w ~/.tauri/unsigned-char.key
-```
-
-Add the same private key to GitHub as `TAURI_SIGNING_PRIVATE_KEY` and, if you used one, its password as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-
-To ship a version:
-
-```bash
-git tag vX.Y.Z
-git push origin main --follow-tags
-```
-
-The release workflow builds the macOS ARM bundle, uploads the signed updater artifacts, and publishes `latest.json` for future OTA checks.
