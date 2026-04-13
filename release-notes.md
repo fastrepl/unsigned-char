@@ -1,1 +1,1 @@
-unsigned Char 0.0.4 restores bundle-based macOS launches so microphone prompts are attached to the app bundle again, and hardens microphone permission detection when macOS app-level and capture-device APIs disagree.
+unsigned Char 0.0.5 fixes false microphone and system-audio permission errors that could block recording even when access was already granted.
