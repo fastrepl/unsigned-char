@@ -297,66 +297,60 @@ function ProcessingModeToggle({
   const unsupportedTooltip = "This model is only available for batch processing.";
   const switchId = useId();
   const descriptionId = `${switchId}-description`;
+  const description = !supported
+    ? "Processed after the meeting ends."
+    : realtimeEnabled
+      ? "Streaming in real time while you record."
+      : "Processed after the meeting ends.";
 
-  const control = (
-    <div
-      className={cn(
-        "flex w-full items-center justify-between gap-4 rounded-[calc(var(--radius)-6px)] border border-[color:var(--border-strong)] bg-[color:var(--card)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.85)]",
-        interactionDisabled && "opacity-60",
-      )}
-    >
+  const switchControl = (
+    <Switch
+      id={switchId}
+      checked={realtimeEnabled}
+      aria-describedby={descriptionId}
+      aria-label="Realtime"
+      disabled={interactionDisabled}
+      onCheckedChange={(checked) => {
+        onChange(checked ? "realtime" : "batch");
+      }}
+      className={cn(!supported && "bg-zinc-200 data-[checked]:bg-zinc-200")}
+    />
+  );
+
+  const switchElement = !supported ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="inline-flex shrink-0 cursor-not-allowed pt-1" />}
+        tabIndex={0}
+        aria-label={unsupportedTooltip}
+      >
+        {switchControl}
+      </TooltipTrigger>
+      <TooltipPopup side="top" align="end">
+        {unsupportedTooltip}
+      </TooltipPopup>
+    </Tooltip>
+  ) : (
+    <div className="inline-flex shrink-0 pt-1">{switchControl}</div>
+  );
+
+  return (
+    <div className={cn("flex items-start justify-between gap-4", interactionDisabled && "opacity-60")}>
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-zinc-950">
-            Realtime transcription
-          </span>
-          {supported ? (
-            <Badge variant={realtimeEnabled ? "info" : "outline"}>
-              {realtimeEnabled ? "On" : "Off"}
-            </Badge>
-          ) : null}
-        </div>
+        <label
+          htmlFor={switchId}
+          className={cn("block text-sm font-semibold text-zinc-950", interactionDisabled && "text-zinc-500")}
+        >
+          Realtime
+        </label>
         <p id={descriptionId} className="mt-1 text-sm leading-6 text-zinc-600">
-          {!supported
-            ? "Processed after the meeting ends."
-            : realtimeEnabled
-              ? "Streaming in real time while you record."
-              : "Processed after the meeting ends."}
+          {description}
         </p>
       </div>
 
-      <Switch
-        id={switchId}
-        checked={realtimeEnabled}
-        aria-describedby={descriptionId}
-        aria-label="Realtime transcription"
-        disabled={interactionDisabled}
-        onCheckedChange={(checked) => {
-          onChange(checked ? "realtime" : "batch");
-        }}
-        className={cn(!supported && "bg-zinc-200 data-[checked]:bg-zinc-200")}
-      />
+      {switchElement}
     </div>
   );
-
-  if (!supported) {
-    return (
-      <Tooltip>
-        <TooltipTrigger
-          render={<span className="block w-full cursor-not-allowed" />}
-          tabIndex={0}
-          aria-label={unsupportedTooltip}
-        >
-          {control}
-        </TooltipTrigger>
-        <TooltipPopup side="top" align="start">
-          {unsupportedTooltip}
-        </TooltipPopup>
-      </Tooltip>
-    );
-  }
-
-  return control;
 }
 
 function getModelDownloadProgressPercent(download: ManagedModelDownloadState | null) {
@@ -1801,15 +1795,12 @@ function SettingsScreen() {
                   </div>
                 </div>
 
-                <div className="grid gap-3">
-                  <p className="text-sm font-semibold text-zinc-950">Realtime</p>
-                  <ProcessingModeToggle
-                    value={snapshot.modelSettings.processingMode}
-                    onChange={appStore.setProcessingMode}
-                    disabled={snapshot.modelBusy || downloadStatus === "downloading"}
-                    supported={selectedBatchSupportsRealtime}
-                  />
-                </div>
+                <ProcessingModeToggle
+                  value={snapshot.modelSettings.processingMode}
+                  onChange={appStore.setProcessingMode}
+                  disabled={snapshot.modelBusy || downloadStatus === "downloading"}
+                  supported={selectedBatchSupportsRealtime}
+                />
 
               </CardPanel>
             </Card>
