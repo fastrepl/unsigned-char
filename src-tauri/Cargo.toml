@@ -1,6 +1,6 @@
 [package]
 name = "unsigned-char"
-version = "0.0.1"
+version = "0.0.2"
 description = "A local-first meeting transcription desktop shell"
 authors = ["John Jeong"]
 license = "MIT"
