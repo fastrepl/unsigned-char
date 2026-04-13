@@ -1453,7 +1453,7 @@ function SettingsScreen() {
     snapshot.permissionNote || snapshot.generalNote || snapshot.summaryNote;
   const settingsContentWidthClass = isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]";
   const settingsShellHeightClass = isSettingsWindow ? "h-screen" : windowShellHeightClass;
-  const settingsContentInsetClass = "px-5 pt-5 pb-6";
+  const settingsContentInsetClass = isSettingsWindow ? "px-5 pt-12 pb-6" : "px-5 pt-5 pb-6";
 
   useEffect(() => {
     const syncTargetSection = () => {
