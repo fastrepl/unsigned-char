@@ -47,6 +47,7 @@ import {
   PROCESSING_MODE_OPTIONS,
   appStore,
   currentSetupBannerContent,
+  formatClockSeconds,
   formatDateTime,
   getMeetingTranscriptLines,
   getTimezoneOptions,
@@ -106,6 +107,41 @@ function LiveIndicator({ className }: { className?: string }) {
       <span className="relative inline-flex size-2 rounded-full bg-rose-400 shadow-[0_0_0_4px_rgba(244,63,94,0.12)]" />
     </span>
   );
+}
+
+function formatTranscriptSpeakerLabel(speaker: string) {
+  const normalized = speaker.trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+
+  if (!normalized) {
+    return "Speaker";
+  }
+
+  const speakerNumberMatch = normalized.match(/^speaker\s*0*([0-9]+)$/i);
+  if (speakerNumberMatch) {
+    return `Speaker ${Number.parseInt(speakerNumberMatch[1], 10) + 1}`;
+  }
+
+  if (/^mic(rophone)?$/i.test(normalized)) {
+    return "Mic";
+  }
+
+  return normalized;
+}
+
+function getTranscriptEntryMeta(meeting: Meeting, index: number) {
+  const segment = meeting.diarizationSegments[index];
+
+  if (segment) {
+    return {
+      speakerLabel: formatTranscriptSpeakerLabel(segment.speaker),
+      timestampLabel: formatClockSeconds(segment.startSeconds),
+    };
+  }
+
+  return {
+    speakerLabel: "Mic",
+    timestampLabel: index === 0 ? formatClockSeconds(0) : null,
+  };
 }
 
 function StatusBadge({
@@ -1123,34 +1159,41 @@ function MeetingScreen() {
               <p className="text-sm leading-6 text-zinc-600">{emptyTranscriptCopy}</p>
             </Card>
           ) : (
-            <Card className="min-h-[260px] flex-1 overflow-hidden">
+            <div className="min-h-[260px] flex-1 overflow-hidden">
               <div className="relative flex h-full min-h-0 flex-col">
                 <section
-                  className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
+                  className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-2"
                   ref={attachTranscriptRef}
                   onScroll={handleTranscriptScroll}
                 >
-                  <div className="space-y-3">
-                    {transcriptLines.map((line, index) => (
-                      <article
-                        key={`${meeting.id}-${index}-${line.slice(0, 12)}`}
-                        className="grid grid-cols-[auto,minmax(0,1fr)] gap-3 rounded-[var(--radius)] border border-[color:var(--border)] bg-[color:var(--secondary)] px-4 py-3"
-                      >
-                        <span className="pt-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                          {index + 1}
-                        </span>
-                        <p className="text-sm leading-6 text-zinc-800">{line}</p>
-                      </article>
-                    ))}
+                  <div className="space-y-5 pb-2">
+                    {transcriptLines.map((line, index) => {
+                      const { speakerLabel, timestampLabel } = getTranscriptEntryMeta(meeting, index);
+
+                      return (
+                        <article
+                          key={`${meeting.id}-${index}-${line.slice(0, 12)}`}
+                          className="space-y-2 border-b border-[color:var(--border)] pb-5 last:border-b-0 last:pb-0"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                            <span className="text-zinc-700">{speakerLabel}</span>
+                            {timestampLabel ? <span>[{timestampLabel}]</span> : null}
+                          </div>
+                          <p className="whitespace-pre-wrap text-[15px] leading-8 text-zinc-800">
+                            {line}
+                          </p>
+                        </article>
+                      );
+                    })}
                   </div>
                 </section>
                 <ScrollFade
-                  tone="card"
+                  tone="background"
                   showTop={transcriptScrollFade.showTop}
                   showBottom={transcriptScrollFade.showBottom}
                 />
               </div>
-            </Card>
+            </div>
           )}
 
           {snapshot.meetingNote ? (
