@@ -49,13 +49,14 @@ import {
   currentSetupBannerContent,
   formatClockSeconds,
   formatDateTime,
-  getMeetingTranscriptLines,
+  getMeetingTranscriptEntries,
   getTimezoneOptions,
   isSettingsWindow,
   requiresAppSetup,
   sortedMeetings,
   type ManagedModelDownloadState,
   type Meeting,
+  type TranscriptEntry,
   useAppState,
 } from "./store";
 import {
@@ -128,7 +129,19 @@ function formatTranscriptSpeakerLabel(speaker: string) {
   return normalized;
 }
 
-function getTranscriptEntryMeta(meeting: Meeting, index: number) {
+function formatTranscriptSourceLabel(source: TranscriptEntry["source"]) {
+  if (source === "microphone") {
+    return "Mic";
+  }
+
+  if (source === "system") {
+    return "System";
+  }
+
+  return "Mixed";
+}
+
+function getTranscriptEntryMeta(meeting: Meeting, entry: TranscriptEntry, index: number) {
   const segment = meeting.diarizationSegments[index];
 
   if (segment) {
@@ -139,7 +152,7 @@ function getTranscriptEntryMeta(meeting: Meeting, index: number) {
   }
 
   return {
-    speakerLabel: "Mic",
+    speakerLabel: formatTranscriptSourceLabel(entry.source),
     timestampLabel: index === 0 ? formatClockSeconds(0) : null,
   };
 }
@@ -957,7 +970,7 @@ function MeetingScreen() {
     );
   }
 
-  const transcriptLines = getMeetingTranscriptLines(meeting);
+  const transcriptEntries = getMeetingTranscriptEntries(meeting);
   const deleteDisabled = isMeetingDeleteDisabled(
     meeting,
     snapshot.transcriptionBusy,
@@ -970,7 +983,7 @@ function MeetingScreen() {
   const isStoppingMeeting = snapshot.transcriptionStopping && meeting.status === "live";
   const summaryReady = Boolean(snapshot.summarySettings?.ready);
   const showSummaryCard = !isMeetingListening && Boolean(meeting.summary);
-  const showSummaryAction = !isMeetingListening && summaryReady && transcriptLines.length > 0;
+  const showSummaryAction = !isMeetingListening && summaryReady && transcriptEntries.length > 0;
   const isGeneratingSummary = snapshot.summaryMeetingId === meeting.id;
   const emptyTranscriptCopy =
     meeting.status === "live" && snapshot.modelSettings?.processingMode === "batch"
@@ -1132,7 +1145,7 @@ function MeetingScreen() {
             </div>
           ) : null}
 
-          {transcriptLines.length === 0 ? (
+          {transcriptEntries.length === 0 ? (
             <Card className="flex min-h-[260px] flex-1 items-center justify-center border-dotted bg-[color:var(--secondary)] px-6 text-center">
               <p className="text-sm leading-6 text-zinc-600">{emptyTranscriptCopy}</p>
             </Card>
@@ -1145,12 +1158,16 @@ function MeetingScreen() {
                   onScroll={handleTranscriptScroll}
                 >
                   <div className="space-y-5 pb-2">
-                    {transcriptLines.map((line, index) => {
-                      const { speakerLabel, timestampLabel } = getTranscriptEntryMeta(meeting, index);
+                    {transcriptEntries.map((entry, index) => {
+                      const { speakerLabel, timestampLabel } = getTranscriptEntryMeta(
+                        meeting,
+                        entry,
+                        index,
+                      );
 
                       return (
                         <article
-                          key={`${meeting.id}-${index}-${line.slice(0, 12)}`}
+                          key={`${meeting.id}-${index}-${entry.source}-${entry.text.slice(0, 12)}`}
                           className="space-y-2 border-b border-[color:var(--border)] pb-5 last:border-b-0 last:pb-0"
                         >
                           <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
@@ -1158,7 +1175,7 @@ function MeetingScreen() {
                             {timestampLabel ? <span>[{timestampLabel}]</span> : null}
                           </div>
                           <p className="whitespace-pre-wrap text-[15px] leading-8 text-zinc-800">
-                            {line}
+                            {entry.text}
                           </p>
                         </article>
                       );

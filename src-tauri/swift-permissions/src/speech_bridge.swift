@@ -197,10 +197,22 @@ private struct ModelDownloadPayload: Codable {
   var error: String?
 }
 
+private enum TranscriptSource: String, CaseIterable, Codable {
+  case microphone
+  case system
+  case mixed
+}
+
+private struct TranscriptEntryPayload: Codable {
+  var source: String
+  var text: String
+}
+
 private struct TranscriptionPayload: Codable {
   var running: Bool
   var text: String
   var error: String?
+  var entries: [TranscriptEntryPayload]
   var audioPath: String
   var mode: String?
 
@@ -208,6 +220,7 @@ private struct TranscriptionPayload: Codable {
     running: false,
     text: "",
     error: nil,
+    entries: [],
     audioPath: "",
     mode: nil
   )
@@ -433,7 +446,7 @@ private final class LiveTranscriptionSession {
   private let captureWriter: WAVCaptureWriter
   private let recordingPath: String
   private let mode: ProcessingMode
-  private let streamingSession: StreamingSession?
+  private let streamingSessions: [TranscriptSource: StreamingSession]
   private let stateLock = NSLock()
   private let bufferLock = NSLock()
   private let processingQueue = DispatchQueue(
@@ -442,9 +455,9 @@ private final class LiveTranscriptionSession {
   )
 
   private var processingTimer: DispatchSourceTimer?
-  private var bufferedSamples: [Float] = []
-  private var finalSegments: [String] = []
-  private var partialText = ""
+  private var bufferedSamplesBySource: [TranscriptSource: [Float]] = [:]
+  private var finalizedEntries: [TranscriptEntryPayload] = []
+  private var partialTexts: [TranscriptSource: String] = [:]
   private var running = false
   private var errorMessage: String?
 
@@ -457,14 +470,17 @@ private final class LiveTranscriptionSession {
     recordingPath = recordingURL.path
     captureWriter = try WAVCaptureWriter(url: recordingURL)
     if let streamingModel {
-      streamingSession = try streamingModel.createSession()
+      streamingSessions = [
+        .microphone: try streamingModel.createSession(),
+        .system: try streamingModel.createSession(),
+      ]
     } else {
-      streamingSession = nil
+      streamingSessions = [:]
     }
   }
 
   func start() throws {
-    if streamingSession != nil {
+    if !streamingSessions.isEmpty {
       let timer = DispatchSource.makeTimerSource(queue: processingQueue)
       timer.schedule(deadline: .now(), repeating: .milliseconds(250))
       timer.setEventHandler { [weak self] in
@@ -484,10 +500,13 @@ private final class LiveTranscriptionSession {
     stateLock.lock()
     defer { stateLock.unlock() }
 
+    let entries = snapshotEntriesLocked()
+
     return TranscriptionPayload(
       running: running,
-      text: transcriptText(),
+      text: transcriptText(from: entries),
       error: errorMessage,
+      entries: entries,
       audioPath: recordingPath,
       mode: mode.rawValue
     )
@@ -503,7 +522,7 @@ private final class LiveTranscriptionSession {
     processingTimer = nil
     timer?.cancel()
 
-    if wasRunning && streamingSession != nil {
+    if wasRunning && !streamingSessions.isEmpty {
       processingQueue.sync {
         processBufferedSamples()
         finalizeStreamingSession()
@@ -516,6 +535,7 @@ private final class LiveTranscriptionSession {
       running: false,
       text: snapshot.text,
       error: snapshot.error,
+      entries: snapshot.entries,
       audioPath: audioPath,
       mode: mode.rawValue
     )
@@ -531,7 +551,7 @@ private final class LiveTranscriptionSession {
     captureWriter.cancel(removeFile: removeRecording)
   }
 
-  func ingest(_ samples: [Float]) {
+  func ingest(mixedSamples: [Float], microphoneSamples: [Float], systemSamples: [Float]) {
     stateLock.lock()
     let isRunning = running
     stateLock.unlock()
@@ -540,68 +560,92 @@ private final class LiveTranscriptionSession {
       return
     }
 
-    append(samples)
+    append(
+      mixedSamples: mixedSamples,
+      sourceSamples: [
+        .microphone: microphoneSamples,
+        .system: systemSamples,
+      ]
+    )
   }
 
-  private func append(_ samples: [Float]) {
-    guard !samples.isEmpty else {
+  private func append(
+    mixedSamples: [Float],
+    sourceSamples: [TranscriptSource: [Float]]
+  ) {
+    guard !mixedSamples.isEmpty else {
       return
     }
 
-    captureWriter.append(samples)
+    captureWriter.append(mixedSamples)
 
-    guard streamingSession != nil else {
+    guard !streamingSessions.isEmpty else {
       return
     }
 
     bufferLock.lock()
-    bufferedSamples.append(contentsOf: samples)
+    for source in TranscriptSource.allCases where source != .mixed {
+      guard let samples = sourceSamples[source], !samples.isEmpty else {
+        continue
+      }
+
+      bufferedSamplesBySource[source, default: []].append(contentsOf: samples)
+    }
     bufferLock.unlock()
   }
 
-  private func takeBufferedSamples() -> [Float] {
+  private func takeBufferedSamples(for source: TranscriptSource) -> [Float] {
     bufferLock.lock()
     defer { bufferLock.unlock() }
 
-    let samples = bufferedSamples
-    bufferedSamples.removeAll(keepingCapacity: true)
+    let samples = bufferedSamplesBySource[source] ?? []
+    bufferedSamplesBySource[source] = []
     return samples
   }
 
   private func processBufferedSamples() {
-    guard let streamingSession else {
-      return
-    }
+    for source in TranscriptSource.allCases where source != .mixed {
+      guard let streamingSession = streamingSessions[source] else {
+        continue
+      }
 
-    let samples = takeBufferedSamples()
-    guard !samples.isEmpty else {
-      return
-    }
+      let samples = takeBufferedSamples(for: source)
+      guard !samples.isEmpty else {
+        continue
+      }
 
-    do {
-      apply(try streamingSession.pushAudio(samples))
-    } catch {
-      fail("speech-swift failed while processing meeting audio: \(error.localizedDescription)")
+      do {
+        apply(try streamingSession.pushAudio(samples), source: source)
+      } catch {
+        fail("speech-swift failed while processing \(source.rawValue) audio: \(error.localizedDescription)")
+        return
+      }
     }
   }
 
   private func finalizeStreamingSession() {
-    guard let streamingSession else {
-      return
-    }
+    for source in TranscriptSource.allCases where source != .mixed {
+      guard let streamingSession = streamingSessions[source] else {
+        continue
+      }
 
-    do {
-      apply(try streamingSession.finalize())
+      do {
+        apply(try streamingSession.finalize(), source: source)
 
-      stateLock.lock()
-      partialText = ""
-      stateLock.unlock()
-    } catch {
-      fail("speech-swift failed while finalizing audio: \(error.localizedDescription)")
+        stateLock.lock()
+        partialTexts[source] = nil
+        stateLock.unlock()
+      } catch {
+        fail("speech-swift failed while finalizing \(source.rawValue) audio: \(error.localizedDescription)")
+        return
+      }
     }
   }
 
-  private func apply(_ partials: [ParakeetStreamingASRModel.PartialTranscript]) {
+  private func apply(
+    _ partials: [ParakeetStreamingASRModel.PartialTranscript],
+    source: TranscriptSource
+  ) {
     guard !partials.isEmpty else {
       return
     }
@@ -614,13 +658,19 @@ private final class LiveTranscriptionSession {
 
       if partial.isFinal {
         if !text.isEmpty {
-          finalSegments.append(text)
+          finalizedEntries.append(
+            TranscriptEntryPayload(source: source.rawValue, text: text)
+          )
         }
-        partialText = ""
+        partialTexts[source] = nil
         continue
       }
 
-      partialText = text
+      if text.isEmpty {
+        partialTexts[source] = nil
+      } else {
+        partialTexts[source] = text
+      }
     }
   }
 
@@ -635,18 +685,23 @@ private final class LiveTranscriptionSession {
     timer?.cancel()
   }
 
-  private func transcriptText() -> String {
-    let finalText = finalSegments.joined(separator: "\n")
+  private func snapshotEntriesLocked() -> [TranscriptEntryPayload] {
+    var entries = finalizedEntries
 
-    if finalText.isEmpty {
-      return partialText
+    for source in TranscriptSource.allCases where source != .mixed {
+      let text = partialTexts[source]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      if !text.isEmpty {
+        entries.append(TranscriptEntryPayload(source: source.rawValue, text: text))
+      }
     }
 
-    if partialText.isEmpty {
-      return finalText
-    }
+    return entries
+  }
 
-    return "\(finalText)\n\(partialText)"
+  private func transcriptText(from entries: [TranscriptEntryPayload]) -> String {
+    entries
+      .map(\.text)
+      .joined(separator: "\n")
   }
 }
 
@@ -818,6 +873,7 @@ private actor SpeechBridge {
           running: false,
           text: "",
           error: error.localizedDescription,
+          entries: [],
           audioPath: recordingPath,
           mode: mode
         )
@@ -846,6 +902,7 @@ private actor SpeechBridge {
           running: false,
           text: snapshot.text,
           error: error.localizedDescription,
+          entries: snapshot.entries,
           audioPath: snapshot.audioPath,
           mode: snapshot.mode
         )
@@ -880,6 +937,9 @@ private actor SpeechBridge {
           running: false,
           text: text,
           error: snapshot.error,
+          entries: text.isEmpty
+            ? []
+            : [TranscriptEntryPayload(source: TranscriptSource.mixed.rawValue, text: text)],
           audioPath: snapshot.audioPath,
           mode: mode?.rawValue
         )
@@ -892,6 +952,7 @@ private actor SpeechBridge {
           running: false,
           text: fallback.text,
           error: error.localizedDescription,
+          entries: fallback.entries,
           audioPath: fallback.audioPath,
           mode: fallback.mode
         )
@@ -899,14 +960,24 @@ private actor SpeechBridge {
     }
   }
 
-  func appendTranscriptionAudio(samplesData: Data) -> String {
+  func appendTranscriptionAudio(
+    mixedSamplesData: Data,
+    microphoneSamplesData: Data,
+    systemSamplesData: Data
+  ) -> String {
     guard let activeSession else {
       return "No active transcription session."
     }
 
     do {
-      let samples = try decodeFloatSamples(from: samplesData)
-      activeSession.ingest(samples)
+      let mixedSamples = try decodeFloatSamples(from: mixedSamplesData)
+      let microphoneSamples = try decodeFloatSamples(from: microphoneSamplesData)
+      let systemSamples = try decodeFloatSamples(from: systemSamplesData)
+      activeSession.ingest(
+        mixedSamples: mixedSamples,
+        microphoneSamples: microphoneSamples,
+        systemSamples: systemSamples
+      )
       return ""
     } catch {
       return error.localizedDescription
@@ -1081,9 +1152,17 @@ public func _speech_live_transcription_state() -> SRString {
 }
 
 @_cdecl("_speech_live_transcription_append")
-public func _speech_live_transcription_append(samples: SRData) -> SRString {
+public func _speech_live_transcription_append(
+  mixedSamples: SRData,
+  microphoneSamples: SRData,
+  systemSamples: SRData
+) -> SRString {
   SRString(waitForValue {
-    await SpeechBridge.shared.appendTranscriptionAudio(samplesData: Data(samples.toArray()))
+    await SpeechBridge.shared.appendTranscriptionAudio(
+      mixedSamplesData: Data(mixedSamples.toArray()),
+      microphoneSamplesData: Data(microphoneSamples.toArray()),
+      systemSamplesData: Data(systemSamples.toArray())
+    )
   })
 }
 

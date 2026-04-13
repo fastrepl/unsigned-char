@@ -21,13 +21,20 @@ export type OnboardingState = {
   ready: boolean;
 };
 
+export type TranscriptSource = "microphone" | "system" | "mixed";
+
+export type TranscriptEntry = {
+  text: string;
+  source: TranscriptSource;
+};
+
 export type Meeting = {
   id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   status: MeetingStatus;
-  transcript: string[];
+  transcript: TranscriptEntry[];
   audioPath: string;
   requestedSpeakerCount: number | null;
   diarizationSegments: DiarizationSegment[];
@@ -166,6 +173,7 @@ type LiveTranscriptionState = {
   running: boolean;
   text: string;
   error: string | null;
+  entries: TranscriptEntry[];
   audioPath: string;
   mode: ProcessingMode | null;
 };
@@ -198,6 +206,7 @@ type AppState = {
   transcriptionStopping: boolean;
   transcriptionRunning: boolean;
   liveTranscriptText: string;
+  liveTranscriptEntries: TranscriptEntry[];
   liveTranscriptionMode: ProcessingMode | null;
   recordingMeetingId: string | null;
   diarizationRunBusy: boolean;
@@ -330,6 +339,7 @@ let state: AppState = {
   transcriptionStopping: false,
   transcriptionRunning: false,
   liveTranscriptText: "",
+  liveTranscriptEntries: [],
   liveTranscriptionMode: null,
   recordingMeetingId: null,
   diarizationRunBusy: false,
@@ -515,7 +525,7 @@ function normalizeMeeting(value: unknown): Meeting | null {
     createdAt: candidate.createdAt,
     updatedAt: candidate.updatedAt,
     status: candidate.status,
-    transcript: candidate.transcript.filter((line): line is string => typeof line === "string"),
+    transcript: normalizeTranscriptEntries(candidate.transcript),
     audioPath: typeof candidate.audioPath === "string" ? candidate.audioPath : "",
     requestedSpeakerCount: normalizeRequestedSpeakerCount(candidate.requestedSpeakerCount),
     diarizationSegments,
@@ -555,6 +565,47 @@ function normalizeMeeting(value: unknown): Meeting | null {
         ? candidate.exportPath
         : null,
   };
+}
+
+function isTranscriptSource(value: unknown): value is TranscriptSource {
+  return value === "microphone" || value === "system" || value === "mixed";
+}
+
+function createTranscriptEntry(text: string, source: TranscriptSource): TranscriptEntry | null {
+  const normalizedText = text.trim();
+  if (!normalizedText) {
+    return null;
+  }
+
+  return {
+    text: normalizedText,
+    source,
+  };
+}
+
+function normalizeTranscriptEntries(value: unknown): TranscriptEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (typeof entry === "string") {
+      const normalized = createTranscriptEntry(entry, "mixed");
+      return normalized ? [normalized] : [];
+    }
+
+    if (!entry || typeof entry !== "object") {
+      return [];
+    }
+
+    const candidate = entry as Record<string, unknown>;
+    if (typeof candidate.text !== "string" || !isTranscriptSource(candidate.source)) {
+      return [];
+    }
+
+    const normalized = createTranscriptEntry(candidate.text, candidate.source);
+    return normalized ? [normalized] : [];
+  });
 }
 
 function normalizeDiarizationSegments(value: unknown): DiarizationSegment[] {
@@ -677,6 +728,28 @@ function formatSpeakerTurnsMarkdown(meeting: Meeting) {
   return lines.join("\n");
 }
 
+function transcriptEntriesToText(entries: TranscriptEntry[]) {
+  return entries.map((entry) => entry.text).join("\n").trim();
+}
+
+function sameTranscriptEntries(left: TranscriptEntry[], right: TranscriptEntry[]) {
+  return (
+    left.length === right.length &&
+    left.every(
+      (entry, index) =>
+        entry.text === right[index]?.text && entry.source === right[index]?.source,
+    )
+  );
+}
+
+function formatTranscriptLineForExport(entry: TranscriptEntry) {
+  if (entry.source === "mixed") {
+    return entry.text;
+  }
+
+  return `${entry.source === "microphone" ? "Mic" : "System"}: ${entry.text}`;
+}
+
 function buildMarkdownExport(meeting: Meeting): MarkdownExport {
   return {
     id: meeting.id,
@@ -693,7 +766,7 @@ function buildMarkdownExport(meeting: Meeting): MarkdownExport {
     diarizationPipelineSource: meeting.diarizationPipelineSource,
     diarizationRanAt: meeting.diarizationRanAt,
     path: meeting.exportPath,
-    transcript: getMeetingTranscriptLines(meeting).join("\n\n"),
+    transcript: getMeetingTranscriptEntries(meeting).map(formatTranscriptLineForExport).join("\n\n"),
     speakerTurns: formatSpeakerTurnsMarkdown(meeting),
   };
 }
@@ -705,15 +778,20 @@ export function sortedMeetings(meetings: Meeting[]) {
   );
 }
 
-export function getMeetingTranscriptLines(meeting: Meeting) {
-  const lines = [...meeting.transcript];
-  const liveText =
-    state.recordingMeetingId === meeting.id ? state.liveTranscriptText.trim() : "";
-  if (liveText) {
-    lines.push(liveText);
+export function getMeetingTranscriptEntries(meeting: Meeting) {
+  const entries = [...meeting.transcript];
+  const liveEntries =
+    state.recordingMeetingId === meeting.id ? state.liveTranscriptEntries : [];
+
+  if (liveEntries.length > 0) {
+    entries.push(...liveEntries);
   }
 
-  return lines;
+  return entries;
+}
+
+export function getMeetingTranscriptLines(meeting: Meeting) {
+  return getMeetingTranscriptEntries(meeting).map((entry) => entry.text);
 }
 
 export function requiresModelSetup(snapshot: AppState) {
@@ -1314,12 +1392,16 @@ async function startLiveTranscriptionSession(meetingId: string) {
     throw new Error("Failed to start local transcription.");
   }
 
+  const liveTranscriptEntries = normalizeTranscriptEntries(snapshot.entries);
+  const liveTranscriptText = transcriptEntriesToText(liveTranscriptEntries) || snapshot.text.trim();
+
   state = {
     ...state,
     recordingMeetingId: meetingId,
     transcriptionRunning: snapshot.running,
     transcriptionStopping: false,
-    liveTranscriptText: snapshot.text.trim(),
+    liveTranscriptText,
+    liveTranscriptEntries,
     liveTranscriptionMode: snapshot.mode,
   };
   emit();
@@ -1329,12 +1411,13 @@ async function startLiveTranscriptionSession(meetingId: string) {
 
 function finalizeLiveTranscript(markDone = false) {
   const meeting = getRecordingMeeting();
-  const text = state.liveTranscriptText.trim();
+  const entries = normalizeTranscriptEntries(state.liveTranscriptEntries);
   const mode = state.liveTranscriptionMode;
 
   if (!meeting) {
     patch({
       liveTranscriptText: "",
+      liveTranscriptEntries: [],
       liveTranscriptionMode: null,
       recordingMeetingId: null,
       transcriptionStopping: false,
@@ -1343,14 +1426,16 @@ function finalizeLiveTranscript(markDone = false) {
   }
 
   updateMeeting(meeting.id, (current) => {
-    const transcript =
-      mode === "batch"
-        ? text
-          ? [text]
-          : current.transcript
-        : text && current.transcript[current.transcript.length - 1] !== text
-          ? [...current.transcript, text]
-          : current.transcript;
+    let transcript = current.transcript;
+
+    if (entries.length > 0) {
+      if (mode === "batch") {
+        transcript = entries;
+      } else if (!sameTranscriptEntries(current.transcript.slice(-entries.length), entries)) {
+        transcript = [...current.transcript, ...entries];
+      }
+    }
+
     const transcriptChanged = transcript !== current.transcript;
 
     return {
@@ -1367,6 +1452,7 @@ function finalizeLiveTranscript(markDone = false) {
 
   patch({
     liveTranscriptText: "",
+    liveTranscriptEntries: [],
     liveTranscriptionMode: null,
     recordingMeetingId: null,
     transcriptionStopping: false,
@@ -1381,13 +1467,16 @@ async function refreshLiveTranscription(silent = false) {
 
   try {
     const snapshot = await invoke<LiveTranscriptionState>("live_transcription_state");
+    const liveTranscriptEntries = normalizeTranscriptEntries(snapshot.entries);
+    const liveTranscriptText = transcriptEntriesToText(liveTranscriptEntries) || snapshot.text.trim();
 
     state = {
       ...state,
       transcriptionRunning: snapshot.running,
       transcriptionBusy: wasStopping ? snapshot.running : state.transcriptionBusy,
       transcriptionStopping: wasStopping && snapshot.running,
-      liveTranscriptText: snapshot.text.trim(),
+      liveTranscriptText,
+      liveTranscriptEntries,
       liveTranscriptionMode: snapshot.mode,
       meetingNote: snapshot.error || state.meetingNote,
     };
@@ -1407,6 +1496,8 @@ async function refreshLiveTranscription(silent = false) {
       transcriptionBusy: false,
       transcriptionRunning: false,
       transcriptionStopping: false,
+      liveTranscriptText: "",
+      liveTranscriptEntries: [],
       liveTranscriptionMode: null,
     });
   } finally {
@@ -1422,6 +1513,8 @@ function waitForDelay(ms: number) {
 
 async function requestStopLiveTranscriptionSession() {
   const snapshot = await invoke<LiveTranscriptionState>("request_stop_live_transcription");
+  const liveTranscriptEntries = normalizeTranscriptEntries(snapshot.entries);
+  const liveTranscriptText = transcriptEntriesToText(liveTranscriptEntries) || snapshot.text.trim();
 
   const stopPending = snapshot.running;
 
@@ -1430,7 +1523,8 @@ async function requestStopLiveTranscriptionSession() {
     transcriptionBusy: stopPending,
     transcriptionRunning: snapshot.running,
     transcriptionStopping: stopPending,
-    liveTranscriptText: snapshot.text.trim(),
+    liveTranscriptText,
+    liveTranscriptEntries,
     liveTranscriptionMode: snapshot.mode,
     meetingNote: snapshot.error || state.meetingNote,
   };
@@ -1480,7 +1574,9 @@ async function reconcilePersistedLiveMeetings() {
   }
 
   const activeMeetingId = snapshot.running ? liveMeetings[0]?.id ?? null : null;
-  const nextLiveTranscriptText = snapshot.text.trim();
+  const nextLiveTranscriptEntries = normalizeTranscriptEntries(snapshot.entries);
+  const nextLiveTranscriptText =
+    transcriptEntriesToText(nextLiveTranscriptEntries) || snapshot.text.trim();
   const nextLiveTranscriptionMode = snapshot.mode;
   const nextMeetingNote = snapshot.error || state.meetingNote;
   const exportPathsToDelete: string[] = [];
@@ -1520,6 +1616,7 @@ async function reconcilePersistedLiveMeetings() {
     state.recordingMeetingId !== activeMeetingId ||
     state.transcriptionRunning !== snapshot.running ||
     state.transcriptionStopping ||
+    !sameTranscriptEntries(state.liveTranscriptEntries, nextLiveTranscriptEntries) ||
     state.liveTranscriptText !== nextLiveTranscriptText ||
     state.liveTranscriptionMode !== nextLiveTranscriptionMode ||
     state.meetingNote !== nextMeetingNote;
@@ -1532,6 +1629,7 @@ async function reconcilePersistedLiveMeetings() {
       transcriptionRunning: snapshot.running,
       transcriptionStopping: false,
       liveTranscriptText: nextLiveTranscriptText,
+      liveTranscriptEntries: nextLiveTranscriptEntries,
       liveTranscriptionMode: nextLiveTranscriptionMode,
       meetingNote: nextMeetingNote,
     };

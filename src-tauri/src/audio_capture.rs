@@ -27,7 +27,7 @@ pub struct LiveCaptureSession {
 impl LiveCaptureSession {
     pub fn start<F>(on_chunk: F) -> Result<Self, String>
     where
-        F: FnMut(Vec<f32>) -> Result<(), String> + Send + 'static,
+        F: FnMut(Vec<f32>, Vec<f32>, Vec<f32>) -> Result<(), String> + Send + 'static,
     {
         let running = Arc::new(AtomicBool::new(false));
         let error = Arc::new(Mutex::new(None));
@@ -111,7 +111,7 @@ fn run_capture_loop<F>(
     error: Arc<Mutex<Option<String>>>,
     mut on_chunk: F,
 ) where
-    F: FnMut(Vec<f32>) -> Result<(), String>,
+    F: FnMut(Vec<f32>, Vec<f32>, Vec<f32>) -> Result<(), String>,
 {
     #[cfg(target_os = "macos")]
     {
@@ -167,7 +167,7 @@ fn run_capture_loop<F>(
         let remaining = finish_joined_audio(&mut joiner, &mut mic_chunks, &mut speaker_chunks);
 
         for (mic, speaker) in remaining {
-            if let Err(message) = on_chunk(mix_audio(&mic, &speaker)) {
+            if let Err(message) = on_chunk(mix_audio(&mic, &speaker), mic, speaker) {
                 set_error(&error, message);
                 break;
             }
@@ -201,7 +201,7 @@ fn process_audio_chunk<F>(
     on_chunk: &mut F,
 ) -> Result<(), String>
 where
-    F: FnMut(Vec<f32>) -> Result<(), String>,
+    F: FnMut(Vec<f32>, Vec<f32>, Vec<f32>) -> Result<(), String>,
 {
     let resampled = match chunk.source {
         AudioSource::Mic => mic_resampler.process(&chunk.samples, chunk.sample_rate),
@@ -225,7 +225,7 @@ where
     }
 
     while let Some((mic, speaker)) = joiner.pop_pair() {
-        on_chunk(mix_audio(&mic, &speaker))?;
+        on_chunk(mix_audio(&mic, &speaker), mic, speaker)?;
     }
 
     Ok(())

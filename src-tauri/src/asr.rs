@@ -24,7 +24,11 @@ swift!(fn _speech_live_transcription_start(
     language: &SRString
 ) -> SRString);
 #[cfg(target_os = "macos")]
-swift!(fn _speech_live_transcription_append(samples: &SRData) -> SRString);
+swift!(fn _speech_live_transcription_append(
+    mixed_samples: &SRData,
+    microphone_samples: &SRData,
+    system_samples: &SRData
+) -> SRString);
 #[cfg(target_os = "macos")]
 swift!(fn _speech_live_transcription_state() -> SRString);
 #[cfg(target_os = "macos")]
@@ -41,10 +45,21 @@ struct CaptureHandle {
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LiveTranscriptEntry {
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub text: String,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LiveTranscriptionState {
     pub running: bool,
     pub text: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub entries: Vec<LiveTranscriptEntry>,
     #[serde(default)]
     pub audio_path: String,
     #[serde(default)]
@@ -138,8 +153,9 @@ impl TranscriptionManager {
 
 impl CaptureHandle {
     fn start() -> Result<Self, String> {
-        let capture =
-            LiveCaptureSession::start(|samples| speech_live_transcription_append(&samples))?;
+        let capture = LiveCaptureSession::start(|mixed, microphone, system| {
+            speech_live_transcription_append(&mixed, &microphone, &system)
+        })?;
         Ok(Self { capture })
     }
 
@@ -257,16 +273,28 @@ fn speech_live_transcription_start(
     }
 }
 
-fn speech_live_transcription_append(samples: &[f32]) -> Result<(), String> {
+fn speech_live_transcription_append(
+    mixed_samples: &[f32],
+    microphone_samples: &[f32],
+    system_samples: &[f32],
+) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let mut bytes = Vec::with_capacity(samples.len() * std::mem::size_of::<f32>());
-        for sample in samples {
-            bytes.extend_from_slice(&sample.to_le_bytes());
-        }
+        let encode = |samples: &[f32]| {
+            let mut bytes = Vec::with_capacity(samples.len() * std::mem::size_of::<f32>());
+            for sample in samples {
+                bytes.extend_from_slice(&sample.to_le_bytes());
+            }
+            let data: SRData = bytes.as_slice().into();
+            (bytes, data)
+        };
 
-        let data: SRData = bytes.as_slice().into();
-        let message = unsafe { _speech_live_transcription_append(&data) };
+        let (_mixed_bytes, mixed_data) = encode(mixed_samples);
+        let (_microphone_bytes, microphone_data) = encode(microphone_samples);
+        let (_system_bytes, system_data) = encode(system_samples);
+        let message = unsafe {
+            _speech_live_transcription_append(&mixed_data, &microphone_data, &system_data)
+        };
         if message.as_str().is_empty() {
             return Ok(());
         }
