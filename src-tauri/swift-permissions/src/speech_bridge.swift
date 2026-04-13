@@ -5,6 +5,7 @@ import OmnilingualASR
 import ParakeetASR
 import ParakeetStreamingASR
 import Qwen3ASR
+import SpeechVAD
 import SwiftRs
 
 private enum SpeechBridgeError: LocalizedError {
@@ -228,6 +229,19 @@ private struct TranscriptionPayload: Codable {
 
 private struct FileTranscriptionPayload: Codable {
   var text: String
+  var error: String?
+}
+
+private struct DiarizationSegmentPayload: Codable {
+  var speaker: String
+  var startSeconds: Double
+  var endSeconds: Double
+}
+
+private struct FileDiarizationPayload: Codable {
+  var segments: [DiarizationSegmentPayload]
+  var speakerCount: Int
+  var pipelineSource: String
   var error: String?
 }
 
@@ -712,10 +726,13 @@ private final class LiveTranscriptionSession {
 
 private actor SpeechBridge {
   static let shared = SpeechBridge()
+  private static let diarizationPipelineSource = "speech-swift / pyannote"
 
   private var loadedModels: [SpeechModelKind: LoadedSpeechModel] = [:]
   private var modelTasks: [SpeechModelKind: Task<LoadedSpeechModel, Error>] = [:]
   private var downloadStates: [SpeechModelKind: ModelDownloadPayload] = [:]
+  private var diarizationPipeline: DiarizationPipeline?
+  private var diarizationPipelineTask: Task<DiarizationPipeline, Error>?
 
   private var activeSession: LiveTranscriptionSession?
   private var activeMode: ProcessingMode?
@@ -1036,6 +1053,42 @@ private actor SpeechBridge {
     return try model.transcribe(audio: audio, sampleRate: 16000, language: language)
   }
 
+  func diarizeAudioFileJSON(audioPath: String) async -> String {
+    do {
+      let payload = try await diarizeRecordedAudio(atPath: audioPath)
+      return encodeJSON(payload)
+    } catch {
+      return encodeJSON(
+        FileDiarizationPayload(
+          segments: [],
+          speakerCount: 0,
+          pipelineSource: Self.diarizationPipelineSource,
+          error: error.localizedDescription
+        )
+      )
+    }
+  }
+
+  private func diarizeRecordedAudio(atPath path: String) async throws -> FileDiarizationPayload {
+    let url = URL(fileURLWithPath: path)
+    let audio = try AudioFileLoader.load(url: url, targetSampleRate: 16000)
+    let pipeline = try await ensureDiarizationPipelineLoaded()
+    let result = pipeline.diarize(audio: audio, sampleRate: 16000, config: .default)
+
+    return FileDiarizationPayload(
+      segments: result.segments.map { segment in
+        DiarizationSegmentPayload(
+          speaker: "speaker_\(segment.speakerId)",
+          startSeconds: Double(segment.startTime),
+          endSeconds: Double(segment.endTime)
+        )
+      },
+      speakerCount: result.numSpeakers,
+      pipelineSource: Self.diarizationPipelineSource,
+      error: nil
+    )
+  }
+
   private func ensureModelLoaded(_ kind: SpeechModelKind) async throws -> LoadedSpeechModel {
     refreshReadyState(for: kind)
 
@@ -1053,6 +1106,33 @@ private actor SpeechBridge {
     loadedModels[kind] = loaded
     refreshReadyState(for: kind)
     return loaded
+  }
+
+  private func ensureDiarizationPipelineLoaded() async throws -> DiarizationPipeline {
+    if let pipeline = diarizationPipeline {
+      return pipeline
+    }
+
+    if let task = diarizationPipelineTask {
+      let pipeline = try await task.value
+      diarizationPipeline = pipeline
+      return pipeline
+    }
+
+    let task = Task<DiarizationPipeline, Error> {
+      try await DiarizationPipeline.fromPretrained()
+    }
+    diarizationPipelineTask = task
+
+    do {
+      let pipeline = try await task.value
+      diarizationPipeline = pipeline
+      diarizationPipelineTask = nil
+      return pipeline
+    } catch {
+      diarizationPipelineTask = nil
+      throw error
+    }
   }
 
   private func updateDownloadProgress(kind: SpeechModelKind, fraction: Double, status: String) {
@@ -1175,6 +1255,13 @@ public func _speech_transcribe_audio_file(
       audioPath: audioPath.toString(),
       language: language.toString()
     )
+  })
+}
+
+@_cdecl("_speech_diarize_audio_file")
+public func _speech_diarize_audio_file(audioPath: SRString) -> SRString {
+  SRString(waitForValue {
+    await SpeechBridge.shared.diarizeAudioFileJSON(audioPath: audioPath.toString())
   })
 }
 

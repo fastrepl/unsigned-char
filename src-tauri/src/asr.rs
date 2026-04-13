@@ -23,6 +23,8 @@ swift!(fn _speech_transcribe_audio_file(
     language: &SRString
 ) -> SRString);
 #[cfg(target_os = "macos")]
+swift!(fn _speech_diarize_audio_file(audio_path: &SRString) -> SRString);
+#[cfg(target_os = "macos")]
 swift!(fn _speech_live_transcription_start(
     mode: &SRString,
     model_id: &SRString,
@@ -88,6 +90,29 @@ pub struct SpeechModelDownloadState {
 struct FileTranscriptionPayload {
     #[serde(default)]
     text: String,
+    error: Option<String>,
+}
+
+#[derive(Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiarizationSegmentPayload {
+    #[serde(default)]
+    pub speaker: String,
+    #[serde(default)]
+    pub start_seconds: f64,
+    #[serde(default)]
+    pub end_seconds: f64,
+}
+
+#[derive(Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDiarizationPayload {
+    #[serde(default)]
+    pub segments: Vec<DiarizationSegmentPayload>,
+    #[serde(default)]
+    pub speaker_count: usize,
+    #[serde(default)]
+    pub pipeline_source: String,
     error: Option<String>,
 }
 
@@ -262,8 +287,12 @@ pub fn transcribe_audio_file(model_id: &str, audio_path: &Path, language: &str) 
             "speech-swift file transcription",
         )?;
 
-        if let Some(error) = response.error.filter(|value| !value.trim().is_empty()) {
-            return Err(error);
+        if let Some(error) = response
+            .error
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            return Err(error.clone());
         }
 
         Ok(response.text)
@@ -274,6 +303,34 @@ pub fn transcribe_audio_file(model_id: &str, audio_path: &Path, language: &str) 
         let _ = model_id;
         let _ = audio_path;
         let _ = language;
+        Err("speech-swift is only available on macOS.".to_string())
+    }
+}
+
+pub fn diarize_audio_file(audio_path: &Path) -> Result<FileDiarizationPayload, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let audio_path_string = audio_path.display().to_string();
+        let audio_path: SRString = audio_path_string.as_str().into();
+        let response: FileDiarizationPayload = decode_json(
+            unsafe { _speech_diarize_audio_file(&audio_path) },
+            "speech-swift diarization",
+        )?;
+
+        if let Some(error) = response
+            .error
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            return Err(error.clone());
+        }
+
+        Ok(response)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = audio_path;
         Err("speech-swift is only available on macOS.".to_string())
     }
 }

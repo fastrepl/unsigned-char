@@ -1505,10 +1505,6 @@ async function ensureDiarizationReady() {
     throw new Error("Diarization settings are still loading.");
   }
 
-  if (!state.diarizationSettings.enabled) {
-    throw new Error("Speaker diarization is not available in this build yet.");
-  }
-
   if (state.diarizationSettings.ready) {
     return;
   }

@@ -24,6 +24,7 @@ let package = Package(
         .product(name: "ParakeetASR", package: "speech-swift"),
         .product(name: "ParakeetStreamingASR", package: "speech-swift"),
         .product(name: "Qwen3ASR", package: "speech-swift"),
+        .product(name: "SpeechVAD", package: "speech-swift"),
         .product(name: "SwiftRs", package: "swift-rs"),
       ],
       path: "src")

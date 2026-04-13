@@ -14,6 +14,7 @@ use std::{
 };
 
 use asr::{
+    diarize_audio_file as speech_diarize_audio_file,
     managed_model_download_state as speech_model_download_state,
     managed_model_path as speech_model_path, reset_managed_model as reset_speech_model,
     start_managed_model_download as start_speech_model_download, LiveTranscriptionState,
@@ -34,7 +35,6 @@ use tracing::{error, info, warn};
 
 const APP_NAME: &str = "unsigned char";
 const APP_DISPLAY_NAME: &str = "unsigned {char}";
-const PYANNOTE_RUNNER_RELATIVE_PATH: &str = "scripts/pyannote_diarize.py";
 const SETTINGS_CONFIG_FILE: &str = "settings.json";
 const LEGACY_GENERAL_SETTINGS_FILE: &str = "general-settings.json";
 const LEGACY_MODEL_SETTINGS_FILE: &str = "model-settings.json";
@@ -42,10 +42,8 @@ const LEGACY_DIARIZATION_SETTINGS_FILE: &str = "diarization-settings.json";
 const OPEN_SETTINGS_MENU_ID: &str = "open-settings";
 const SETTINGS_WINDOW_LABEL: &str = "settings";
 const CHAR_WEBSITE_URL: &str = "https://char.com";
-const PYANNOTE_PROVIDER_LABEL: &str = "pyannote.audio";
-const PYANNOTE_PIPELINE_REPO: &str = "pyannote/speaker-diarization-community-1";
-const HUGGING_FACE_TOKEN_ENV: &str = "HF_TOKEN";
-const HUGGING_FACE_ALT_TOKEN_ENV: &str = "HUGGINGFACE_TOKEN";
+const DIARIZATION_PROVIDER_LABEL: &str = "speech-swift";
+const DIARIZATION_PIPELINE_LABEL: &str = "built-in native diarization";
 
 #[derive(Default)]
 struct AppState {
@@ -157,15 +155,29 @@ struct StoredModelSettings {
     batch_model_id: Option<SpeechModelId>,
 }
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+fn default_diarization_enabled() -> bool {
+    true
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredDiarizationSettings {
-    #[serde(default)]
+    #[serde(default = "default_diarization_enabled")]
     enabled: bool,
     #[serde(default)]
     local_path: String,
     #[serde(default)]
     hugging_face_token: String,
+}
+
+impl Default for StoredDiarizationSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            local_path: String::new(),
+            hugging_face_token: String::new(),
+        }
+    }
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -316,12 +328,6 @@ struct DiarizationSegment {
     speaker: String,
     start_seconds: f64,
     end_seconds: f64,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LocalDiarizationScriptOutput {
-    segments: Vec<DiarizationSegment>,
 }
 
 #[derive(Serialize)]
@@ -695,7 +701,7 @@ fn save_diarization_settings<R: tauri::Runtime>(
 
     let token = settings.hugging_face_token.trim();
     if !token.is_empty() {
-        stored.hugging_face_token = normalize_hugging_face_token(token)?;
+        stored.hugging_face_token = token.to_string();
     }
 
     persist_diarization_settings(&app, &stored)?;
@@ -754,90 +760,45 @@ async fn generate_transcript_summary<R: tauri::Runtime>(
 
 #[tauri::command]
 fn run_local_diarization<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
+    _app: tauri::AppHandle<R>,
     input: RunLocalDiarizationInput,
 ) -> Result<LocalDiarizationResult, String> {
     info!(
         audio_path = %input.audio_path,
         speaker_count = ?input.speaker_count,
-        "Starting local diarization run",
+        "Starting built-in diarization run",
     );
-
-    let settings = load_diarization_settings(&app)?;
-    if !settings.enabled {
-        return Err("Enable speaker diarization in Settings first.".to_string());
-    }
-
-    let resolved_audio_path = resolve_audio_file_path(&input.audio_path)?;
-    let runner_path = resolve_pyannote_runner_path(&app);
-    if !runner_path.exists() {
-        return Err(format!(
-            "pyannote runner script not found at {}.",
-            runner_path.display()
-        ));
-    }
-
-    let (pipeline_source, hugging_face_token) = resolve_pyannote_pipeline_source(&settings)?;
-    let python = resolve_python_command()?;
-    let mut command = std::process::Command::new(python);
-    command
-        .arg(&runner_path)
-        .arg("--audio-path")
-        .arg(&resolved_audio_path)
-        .arg("--pipeline")
-        .arg(&pipeline_source);
 
     if let Some(speaker_count) = input.speaker_count {
         if speaker_count == 0 {
             return Err("Speaker count must be at least 1.".to_string());
         }
-
-        command
-            .arg("--speaker-count")
-            .arg(speaker_count.to_string());
     }
 
-    if let Some(token) = hugging_face_token {
-        command.env(HUGGING_FACE_TOKEN_ENV, token);
-    }
-
-    let output = command.output().map_err(|error| {
-        format!(
-            "Failed to launch {} for pyannote.audio diarization: {error}",
-            python
-        )
-    })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let detail = if !stderr.is_empty() {
-            stderr
-        } else if !stdout.is_empty() {
-            stdout
-        } else {
-            "Unknown diarization runner failure.".to_string()
-        };
-        return Err(detail);
-    }
-
-    let script_output: LocalDiarizationScriptOutput = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("Invalid diarization output: {error}"))?;
-    let speaker_count = distinct_speaker_count(&script_output.segments);
+    let resolved_audio_path = resolve_audio_file_path(&input.audio_path)?;
+    let result = speech_diarize_audio_file(&resolved_audio_path)?;
 
     info!(
         audio_path = %resolved_audio_path.display(),
-        speaker_count,
-        segments = script_output.segments.len(),
-        pipeline_source = %pipeline_source,
-        "Finished local diarization run",
+        speaker_count = result.speaker_count,
+        segments = result.segments.len(),
+        pipeline_source = %result.pipeline_source,
+        "Finished built-in diarization run",
     );
 
     Ok(LocalDiarizationResult {
         audio_path: resolved_audio_path.display().to_string(),
-        pipeline_source,
-        speaker_count,
-        segments: script_output.segments,
+        pipeline_source: result.pipeline_source,
+        speaker_count: result.speaker_count,
+        segments: result
+            .segments
+            .into_iter()
+            .map(|segment| DiarizationSegment {
+                speaker: segment.speaker,
+                start_seconds: segment.start_seconds,
+                end_seconds: segment.end_seconds,
+            })
+            .collect(),
     })
 }
 
@@ -1275,43 +1236,25 @@ fn build_model_settings_state<R: tauri::Runtime>(
 }
 
 fn build_diarization_settings_state(
-    settings: &StoredDiarizationSettings,
+    _settings: &StoredDiarizationSettings,
 ) -> Result<DiarizationSettingsState, String> {
-    let enabled = settings.enabled;
-    let local_path = settings.local_path.trim().to_string();
-    let configured_local_path = resolve_custom_model_path(&local_path);
-    let resolved_local_path = configured_local_path
-        .as_deref()
-        .and_then(resolve_pyannote_pipeline_path);
-    let local_ready = resolved_local_path.is_some();
-    let display_local_path = resolved_local_path
-        .as_ref()
-        .cloned()
-        .or(configured_local_path.clone());
-    let (hugging_face_token, hugging_face_token_source_label) =
-        resolve_hugging_face_token(settings)?;
-    let hugging_face_token_present = !hugging_face_token.is_empty();
-    let ready = !enabled || local_ready || hugging_face_token_present;
-    let status = build_pyannote_status(
-        enabled,
-        &local_path,
-        display_local_path.as_deref(),
-        local_ready,
-        hugging_face_token_present,
-        hugging_face_token_source_label,
-    );
+    let enabled = true;
+    let ready = enabled;
+    let status = if enabled {
+        "Built-in speech-swift diarization runs locally after each meeting and downloads native models on first use.".to_string()
+    } else {
+        "Speaker diarization is off.".to_string()
+    };
 
     Ok(DiarizationSettingsState {
         enabled,
-        provider_label: PYANNOTE_PROVIDER_LABEL,
-        pipeline_repo: PYANNOTE_PIPELINE_REPO,
-        local_path,
-        resolved_local_path: display_local_path
-            .as_ref()
-            .map(|path| path.display().to_string()),
-        local_ready,
-        hugging_face_token_present,
-        hugging_face_token_source_label,
+        provider_label: DIARIZATION_PROVIDER_LABEL,
+        pipeline_repo: DIARIZATION_PIPELINE_LABEL,
+        local_path: String::new(),
+        resolved_local_path: None,
+        local_ready: enabled,
+        hugging_face_token_present: false,
+        hugging_face_token_source_label: None,
         ready,
         status,
     })
@@ -1760,36 +1703,6 @@ fn apply_speech_model_download_state(
     download_state.error = speech_state.error;
 }
 
-fn resolve_pyannote_runner_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> PathBuf {
-    let packaged_candidate = app
-        .path()
-        .resource_dir()
-        .ok()
-        .map(|path| path.join(PYANNOTE_RUNNER_RELATIVE_PATH));
-    let dev_candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("resources")
-        .join(PYANNOTE_RUNNER_RELATIVE_PATH);
-
-    match packaged_candidate {
-        Some(path) if path.exists() => path,
-        _ => dev_candidate,
-    }
-}
-
-fn resolve_custom_model_path(raw_path: &str) -> Option<PathBuf> {
-    let trimmed = raw_path.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let expanded = expand_home_path(trimmed);
-    if !expanded.exists() {
-        return None;
-    }
-
-    std::fs::canonicalize(&expanded).ok().or(Some(expanded))
-}
-
 fn resolve_audio_file_path(raw_path: &str) -> Result<PathBuf, String> {
     let trimmed = raw_path.trim();
     if trimmed.is_empty() {
@@ -1827,197 +1740,6 @@ fn expand_home_path(raw_path: &str) -> PathBuf {
     }
 
     PathBuf::from(raw_path)
-}
-
-fn resolve_python_command() -> Result<&'static str, String> {
-    for candidate in ["python3", "python"] {
-        let status = std::process::Command::new(candidate)
-            .arg("--version")
-            .status();
-        if matches!(status, Ok(status) if status.success()) {
-            return Ok(candidate);
-        }
-    }
-
-    Err(
-        "Python 3 is required to run local diarization. Install python3 and pyannote.audio first."
-            .to_string(),
-    )
-}
-
-fn pyannote_path_is_ready(path: &Path) -> bool {
-    path.is_dir() && path.join("config.yaml").is_file()
-}
-
-fn resolve_pyannote_pipeline_path(path: &Path) -> Option<PathBuf> {
-    if pyannote_path_is_ready(path) {
-        return Some(path.to_path_buf());
-    }
-
-    let snapshots_dir = path.join("snapshots");
-    if !snapshots_dir.is_dir() {
-        return None;
-    }
-
-    let main_ref_path = path.join("refs").join("main");
-    if let Ok(reference) = std::fs::read_to_string(&main_ref_path) {
-        let candidate = snapshots_dir.join(reference.trim());
-        if pyannote_path_is_ready(&candidate) {
-            return Some(candidate);
-        }
-    }
-
-    let mut candidates = Vec::new();
-    for entry in std::fs::read_dir(&snapshots_dir).ok()?.flatten() {
-        let candidate = entry.path();
-        if !pyannote_path_is_ready(&candidate) {
-            continue;
-        }
-
-        let modified = entry
-            .metadata()
-            .and_then(|metadata| metadata.modified())
-            .ok();
-        candidates.push((modified, candidate));
-    }
-
-    candidates.sort_by(|left, right| right.0.cmp(&left.0));
-    candidates
-        .into_iter()
-        .map(|(_, candidate)| candidate)
-        .next()
-}
-
-fn normalize_hugging_face_token(input: &str) -> Result<String, String> {
-    let value = input.trim();
-    if value.chars().any(char::is_whitespace) {
-        return Err("Hugging Face access tokens cannot contain spaces.".to_string());
-    }
-
-    Ok(value.to_string())
-}
-
-fn resolve_hugging_face_token(
-    settings: &StoredDiarizationSettings,
-) -> Result<(String, Option<&'static str>), String> {
-    let stored = settings.hugging_face_token.trim();
-    if !stored.is_empty() {
-        return Ok((
-            normalize_hugging_face_token(stored)?,
-            Some("Access token saved locally in app config."),
-        ));
-    }
-
-    for (env_name, source_label) in [
-        (
-            HUGGING_FACE_TOKEN_ENV,
-            "Using HF_TOKEN from the environment.",
-        ),
-        (
-            HUGGING_FACE_ALT_TOKEN_ENV,
-            "Using HUGGINGFACE_TOKEN from the environment.",
-        ),
-    ] {
-        let env_value = env::var(env_name).unwrap_or_default();
-        let env_value = env_value.trim();
-        if env_value.is_empty() {
-            continue;
-        }
-
-        return Ok((normalize_hugging_face_token(env_value)?, Some(source_label)));
-    }
-
-    Ok((String::new(), None))
-}
-
-fn resolve_pyannote_pipeline_source(
-    settings: &StoredDiarizationSettings,
-) -> Result<(String, Option<String>), String> {
-    let local_path = settings.local_path.trim();
-    if let Some(configured_path) = resolve_custom_model_path(local_path) {
-        if let Some(path) = resolve_pyannote_pipeline_path(&configured_path) {
-            return Ok((path.display().to_string(), None));
-        }
-    }
-
-    let (token, _) = resolve_hugging_face_token(settings)?;
-    if token.is_empty() {
-        return Err("Add a local community-1 snapshot path or a Hugging Face token in Settings before running diarization.".to_string());
-    }
-
-    Ok((PYANNOTE_PIPELINE_REPO.to_string(), Some(token)))
-}
-
-fn build_pyannote_status(
-    enabled: bool,
-    local_path: &str,
-    resolved_local_path: Option<&Path>,
-    local_ready: bool,
-    hugging_face_token_present: bool,
-    hugging_face_token_source_label: Option<&'static str>,
-) -> String {
-    if !enabled {
-        return "Speaker diarization is off.".to_string();
-    }
-
-    if let Some(path) = resolved_local_path {
-        if local_ready {
-            return format!(
-                "Using local {} pipeline from {}.",
-                PYANNOTE_PIPELINE_REPO,
-                path.display()
-            );
-        }
-
-        if hugging_face_token_present {
-            return format!(
-                "Found {} for {}, but no community-1 pipeline files were detected there. {} will fall back to downloading the pipeline with the configured Hugging Face token.",
-                path.display(),
-                PYANNOTE_PIPELINE_REPO,
-                PYANNOTE_PROVIDER_LABEL
-            );
-        }
-
-        return format!(
-            "Found {} for {}, but no community-1 pipeline files were detected there.",
-            path.display(),
-            PYANNOTE_PIPELINE_REPO
-        );
-    }
-
-    if !local_path.is_empty() {
-        if hugging_face_token_present {
-            return format!(
-                "Local diarization path not found: {local_path}. {} will download {} locally when diarization runs.",
-                PYANNOTE_PROVIDER_LABEL, PYANNOTE_PIPELINE_REPO
-            );
-        }
-
-        return format!("Local diarization path not found: {local_path}");
-    }
-
-    if !hugging_face_token_present {
-        return "Add a local community-1 snapshot path or a Hugging Face token so pyannote.audio can load the diarization pipeline locally.".to_string();
-    }
-
-    let mut status = format!(
-        "{} will download {} locally when diarization runs.",
-        PYANNOTE_PROVIDER_LABEL, PYANNOTE_PIPELINE_REPO
-    );
-    if let Some(source_label) = hugging_face_token_source_label {
-        status.push(' ');
-        status.push_str(source_label);
-    }
-    status.push_str(" Install ffmpeg and pyannote.audio before running local diarization.");
-    status
-}
-
-fn distinct_speaker_count(segments: &[DiarizationSegment]) -> usize {
-    let mut speakers = std::collections::BTreeSet::new();
-    for segment in segments {
-        speakers.insert(segment.speaker.as_str());
-    }
-    speakers.len()
 }
 
 fn resolve_selected_model_path<R: tauri::Runtime>(
