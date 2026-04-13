@@ -102,7 +102,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_SECRET" > updater.key
-          export TAURI_SIGNING_PRIVATE_KEY="$(cat updater.key)"
+          export TAURI_SIGNING_PRIVATE_KEY_PATH="$PWD/updater.key"
           export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$TAURI_SIGNING_PRIVATE_KEY_PASSWORD_SECRET"
           bun run tauri build --target aarch64-apple-darwin
 
