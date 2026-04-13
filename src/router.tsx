@@ -1423,87 +1423,83 @@ function MeetingScreen() {
         </div>
       </WindowDragRegion>
 
-      <div className="shrink-0 flex min-w-0 items-end gap-3">
-        <div className="flex min-w-0 flex-1 items-end justify-start">
-          <Button
-            size="lg"
-            variant={meeting.status === "live" ? "destructive" : "outline"}
-            className="w-full min-w-0"
-            disabled={snapshot.transcriptionBusy}
-            loading={isStoppingMeeting}
-            onClick={() => {
-              void appStore.toggleMeetingStatus(meeting.id);
-            }}
-          >
-            {meeting.status === "live" ? (
-              isStoppingMeeting
-                ? "Processing audio"
-                : isStartingMeeting
-                  ? "Starting listening"
-                  : "Stop listening"
-            ) : (
-              <>
-                <LiveIndicator />
-                <span>Resume listening</span>
-              </>
-            )}
-          </Button>
-        </div>
+      <div className="shrink-0 grid min-w-0 grid-cols-2 gap-3">
+        <Button
+          size="lg"
+          variant={meeting.status === "live" ? "destructive" : "outline"}
+          className="w-full min-w-0"
+          disabled={snapshot.transcriptionBusy}
+          loading={isStoppingMeeting}
+          onClick={() => {
+            void appStore.toggleMeetingStatus(meeting.id);
+          }}
+        >
+          {meeting.status === "live" ? (
+            isStoppingMeeting
+              ? "Processing audio"
+              : isStartingMeeting
+                ? "Starting listening"
+                : "Stop listening"
+          ) : (
+            <>
+              <LiveIndicator />
+              <span>Resume listening</span>
+            </>
+          )}
+        </Button>
 
-        <div className="min-w-0 flex-1">
-          <Tooltip>
-            {summaryActionDisabled ? (
-              <TooltipTrigger
-                render={<span className="flex w-full min-w-0" />}
-                tabIndex={0}
-                aria-label={summaryTooltipTitle}
+        <Tooltip>
+          {summaryActionDisabled ? (
+            <TooltipTrigger
+              render={<span className="block w-full min-w-0" />}
+              tabIndex={0}
+              aria-label={summaryTooltipTitle}
+            >
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full min-w-0"
+                disabled
+                loading={isGeneratingSummary}
               >
+                Generate summary
+              </Button>
+            </TooltipTrigger>
+          ) : (
+            <TooltipTrigger
+              render={
                 <Button
                   size="lg"
                   variant="outline"
                   className="w-full min-w-0"
-                  disabled
-                  loading={isGeneratingSummary}
-                >
-                  Generate summary
-                </Button>
-              </TooltipTrigger>
-            ) : (
-              <TooltipTrigger
-                render={
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full min-w-0"
-                    onClick={() => {
-                      void appStore.generateMeetingSummary(meeting.id);
-                    }}
-                  />
-                }
-              >
-                Generate summary
-              </TooltipTrigger>
-            )}
-            <TooltipPopup side="bottom" align="start">
-              <div className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">
-                  {summaryTooltipTitle}
-                </p>
-                <p>{summaryActionHint}</p>
-                <Button
-                  size="xs"
-                  variant="secondary"
-                  className="w-full justify-center border-white/10 bg-white/10 text-white hover:bg-white/16 data-pressed:bg-white/14"
                   onClick={() => {
-                    void appStore.openSettingsWindow(AI_SUMMARIES_SETTINGS_SECTION);
+                    void appStore.generateMeetingSummary(meeting.id);
                   }}
-                >
-                  Open preferences
-                </Button>
-              </div>
-            </TooltipPopup>
-          </Tooltip>
-        </div>
+                />
+              }
+            >
+              Generate summary
+            </TooltipTrigger>
+          )}
+          <TooltipPopup side="bottom" align="start">
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">
+                {summaryTooltipTitle}
+              </p>
+              <p>{summaryActionHint}</p>
+              <Button
+                size="xs"
+                variant="secondary"
+                className="w-full justify-center border-white/10 bg-white/10 text-white hover:bg-white/16 data-pressed:bg-white/14"
+                onClick={() => {
+                  void appStore.openSettingsWindow(AI_SUMMARIES_SETTINGS_SECTION);
+                }}
+              >
+                Open preferences
+              </Button>
+            </div>
+          </TooltipPopup>
+        </Tooltip>
       </div>
 
       {showDiarizationActivity ? (
