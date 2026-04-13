@@ -1412,6 +1412,7 @@ function MeetingScreen() {
     !summaryReady ||
     isMeetingListening ||
     transcriptEntries.length === 0;
+  const showTranscriptEmptyState = transcriptEntries.length === 0;
   const emptyTranscriptCopy =
     isStartingMeeting
       ? "Transcription is starting."
@@ -1622,7 +1623,7 @@ function MeetingScreen() {
             ref={attachTranscriptRef}
             onScroll={handleTranscriptScroll}
           >
-            <div className="flex min-h-full flex-col gap-4 px-4">
+            <div className={cn("flex min-h-full flex-col gap-4 px-4", showTranscriptEmptyState && "h-full")}>
               {showSummaryCard ? (
                 <Card>
                   <CardHeader className="flex-row items-start justify-between gap-4">
@@ -1655,9 +1656,9 @@ function MeetingScreen() {
                 </Card>
               ) : null}
 
-              {transcriptEntries.length === 0 ? (
-                <div className="flex flex-1">
-                  <Card className="flex min-h-[260px] flex-1 items-center justify-center border-dotted bg-[color:var(--secondary)] px-6 text-center">
+              {showTranscriptEmptyState ? (
+                <div className="flex min-h-0 flex-1">
+                  <Card className="flex h-full min-h-[260px] flex-1 items-center justify-center border-dotted bg-[color:var(--secondary)] px-6 text-center">
                     <p className="text-sm leading-6 text-zinc-600">{emptyTranscriptCopy}</p>
                   </Card>
                 </div>
