@@ -529,8 +529,9 @@ function MainWindowCharBanner() {
           <div className="mt-4 flex items-center gap-2" data-window-drag="false">
             <Button
               type="button"
+              variant="outline"
               size="sm"
-              className="border-white bg-white text-zinc-950 shadow-none hover:bg-zinc-100 data-pressed:bg-zinc-100"
+              className="border-white bg-white shadow-none hover:bg-zinc-100 data-pressed:bg-zinc-100"
               onClick={() => {
                 void invoke("open_char_website").catch((error) => {
                   console.error("Failed to open Char website", error);
