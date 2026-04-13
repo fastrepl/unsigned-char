@@ -30,7 +30,7 @@ use speech_models::{
 };
 use tauri::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu},
-    Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder,
+    Emitter, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder,
 };
 use tracing::{error, info, warn};
 
@@ -40,6 +40,8 @@ const SETTINGS_CONFIG_FILE: &str = "settings.json";
 const LEGACY_GENERAL_SETTINGS_FILE: &str = "general-settings.json";
 const LEGACY_MODEL_SETTINGS_FILE: &str = "model-settings.json";
 const LEGACY_DIARIZATION_SETTINGS_FILE: &str = "diarization-settings.json";
+const CHECK_FOR_UPDATES_MENU_ID: &str = "check-for-updates";
+const CHECK_FOR_UPDATES_EVENT: &str = "check-for-updates";
 const OPEN_SETTINGS_MENU_ID: &str = "open-settings";
 const SETTINGS_WINDOW_LABEL: &str = "settings";
 const CHAR_WEBSITE_URL: &str = "https://char.com";
@@ -1072,6 +1074,14 @@ fn build_app_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result
         true,
         Some("CmdOrCtrl+,"),
     )?;
+    let check_for_updates_item =
+        MenuItem::with_id(
+            app,
+            CHECK_FOR_UPDATES_MENU_ID,
+            "Check for Updates...",
+            true,
+            None::<&str>,
+        )?;
 
     let edit_menu = Submenu::with_items(
         app,
@@ -1118,6 +1128,7 @@ fn build_app_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result
         true,
         &[
             &PredefinedMenuItem::about(app, Some(&about_label), Some(about_metadata))?,
+            &check_for_updates_item,
             &PredefinedMenuItem::separator(app)?,
             &settings_item,
             &PredefinedMenuItem::separator(app)?,
@@ -2480,6 +2491,8 @@ pub fn run() {
         .on_menu_event(|app, event| {
             if event.id() == OPEN_SETTINGS_MENU_ID {
                 let _ = show_settings_window(app, None);
+            } else if event.id() == CHECK_FOR_UPDATES_MENU_ID {
+                let _ = app.emit(CHECK_FOR_UPDATES_EVENT, ());
             }
         })
         .invoke_handler(tauri::generate_handler![
