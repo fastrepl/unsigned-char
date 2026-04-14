@@ -59,11 +59,14 @@ struct AppState {
 #[serde(rename_all = "camelCase")]
 struct OnboardingState {
     product_name: &'static str,
+    bundle_identifier: String,
     engine: String,
     reference: String,
     permissions: PermissionSnapshot,
     ready: bool,
     running_inside_app_bundle: bool,
+    permission_host_identifier: Option<String>,
+    permission_host_matches_bundle_identifier: bool,
 }
 
 #[derive(Deserialize)]
@@ -471,9 +474,12 @@ fn onboarding_state<R: tauri::Runtime>(
 ) -> Result<OnboardingState, String> {
     let permissions = permissions::snapshot()?;
     let model_settings = build_model_settings_state(&app, &load_model_settings(&app)?)?;
+    let bundle_identifier = app.config().identifier.clone();
+    let permission_host_identifier = current_bundle_signature_identifier();
 
     Ok(OnboardingState {
         product_name: APP_DISPLAY_NAME,
+        bundle_identifier: bundle_identifier.clone(),
         engine: model_settings.selected_model_label.to_string(),
         reference: model_settings
             .selected_reference
@@ -482,14 +488,40 @@ fn onboarding_state<R: tauri::Runtime>(
         ready: permissions.ready() && model_settings.selected_ready,
         permissions,
         running_inside_app_bundle: is_running_inside_app_bundle(),
+        permission_host_matches_bundle_identifier: permission_host_identifier
+            .as_ref()
+            .is_none_or(|value| value == &bundle_identifier),
+        permission_host_identifier,
     })
 }
 
 fn is_running_inside_app_bundle() -> bool {
-    env::current_exe().ok().is_some_and(|path| {
+    current_app_bundle_path().is_some()
+}
+
+fn current_app_bundle_path() -> Option<PathBuf> {
+    env::current_exe().ok().and_then(|path| {
         path.ancestors()
-            .any(|ancestor| ancestor.extension().and_then(|ext| ext.to_str()) == Some("app"))
+            .find(|ancestor| ancestor.extension().and_then(|ext| ext.to_str()) == Some("app"))
+            .map(PathBuf::from)
     })
+}
+
+fn current_bundle_signature_identifier() -> Option<String> {
+    let bundle_path = current_app_bundle_path()?;
+    let output = Command::new("codesign")
+        .args(["-dvv"])
+        .arg(bundle_path)
+        .output()
+        .ok()?;
+    let stderr = String::from_utf8(output.stderr).ok()?;
+
+    stderr
+        .lines()
+        .find_map(|line| line.strip_prefix("Identifier="))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 #[tauri::command]

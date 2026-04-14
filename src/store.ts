@@ -15,11 +15,14 @@ export type SpeechModelId =
 
 export type OnboardingState = {
   productName: string;
+  bundleIdentifier: string;
   engine: string;
   reference: string;
   permissions: Record<PermissionKind, PermissionStatus>;
   ready: boolean;
   runningInsideAppBundle: boolean;
+  permissionHostIdentifier: string | null;
+  permissionHostMatchesBundleIdentifier: boolean;
 };
 
 export type TranscriptSource = "microphone" | "system" | "mixed";
@@ -1906,11 +1909,22 @@ function permissionLabel(permission: PermissionKind) {
 }
 
 function permissionHostHint(permission: PermissionKind) {
-  if (state.onboarding?.runningInsideAppBundle !== false) {
+  if (!state.onboarding) {
     return "";
   }
 
-  return ` If no ${permissionLabel(permission).toLowerCase()} prompt appears, macOS may be treating the app that launched \`bun desktop:dev\` as the permission host instead of unsigned Char. Check Warp, Ghostty, or Terminal, or run \`bun desktop\`.`;
+  if (state.onboarding.runningInsideAppBundle === false) {
+    return ` If no ${permissionLabel(permission).toLowerCase()} prompt appears, macOS may be treating the app that launched \`bun desktop:dev\` as the permission host instead of unsigned Char. Check Warp, Ghostty, or Terminal, or run \`bun desktop\`.`;
+  }
+
+  if (state.onboarding.permissionHostMatchesBundleIdentifier === false) {
+    const actual = state.onboarding.permissionHostIdentifier
+      ? ` It is currently signed as \`${state.onboarding.permissionHostIdentifier}\` instead of \`${state.onboarding.bundleIdentifier}\`.`
+      : "";
+    return ` macOS may not register this copy of unsigned Char in Privacy & Security.${actual} Reopen it with \`bun desktop\`, which re-signs the local debug app, or use /Applications/unsigned Char.app.`;
+  }
+
+  return "";
 }
 
 function permissionDeniedMessage(permission: PermissionKind) {
