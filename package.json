@@ -1,7 +1,7 @@
 {
   "name": "unsigned-char",
   "private": true,
-  "version": "0.0.8",
+  "version": "0.0.9",
   "license": "MIT",
   "packageManager": "bun@1.3.9",
   "bin": {

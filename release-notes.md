@@ -1,1 +1,1 @@
-unsigned Char 0.0.8 fixes installed DMG builds that were missing the macOS microphone entitlement and could not register for microphone access.
+unsigned Char 0.0.9 fixes meeting startup getting stuck in "Starting listening" and stops incomplete local model caches from being treated as ready.
