@@ -36,7 +36,8 @@
     "createUpdaterArtifacts": true,
     "copyright": "Copyright (c) 2026 John Jeong",
     "macOS": {
-      "minimumSystemVersion": "15.0"
+      "minimumSystemVersion": "15.0",
+      "entitlements": "./Entitlements.plist"
     },
     "externalBin": [
       "binaries/uchar"
