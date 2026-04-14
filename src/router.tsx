@@ -73,7 +73,6 @@ import {
   SelectPopup,
   SelectTrigger,
   ScrollFade,
-  Switch,
   Tooltip,
   TooltipPopup,
   TooltipTrigger,
@@ -91,6 +90,7 @@ import {
   isSettingsWindow,
   requiresAppSetup,
   sortedMeetings,
+  type AudioRetentionPolicy,
   type ManagedModelDownloadState,
   type Meeting,
   type SpeechModelId,
@@ -720,6 +720,40 @@ const summaryProviderOptions: readonly SearchableOption[] = [
     logoSrc: summaryProviderLogos[provider.id],
     logoClassName: summaryProviderLogoClassNames[provider.id],
   })),
+];
+
+const audioRetentionOptions: readonly SearchableOption[] = [
+  {
+    value: "none",
+    label: "Don't save",
+    detail: "Off",
+    icon: "disabled",
+    searchTerms: ["disable diarization", "do not save", "no audio"],
+  },
+  {
+    value: "oneDay",
+    label: "For 1 day",
+    detail: "1 day",
+    icon: "local",
+  },
+  {
+    value: "threeDays",
+    label: "For 3 days",
+    detail: "3 days",
+    icon: "local",
+  },
+  {
+    value: "oneWeek",
+    label: "For 1 week",
+    detail: "1 week",
+    icon: "local",
+  },
+  {
+    value: "oneMonth",
+    label: "For 1 month",
+    detail: "1 month",
+    icon: "local",
+  },
 ];
 
 function shouldSkipWindowDrag(target: EventTarget | null) {
@@ -1968,27 +2002,25 @@ function SettingsScreen() {
                   />
                 </div>
 
-                <Field className={cn(insetPanelClass, "gap-3")}>
-                  <div className="flex w-full items-start justify-between gap-4">
-                    <div className="min-w-0 space-y-1">
-                      <FieldLabel>Save audio after meeting</FieldLabel>
-                      <FieldDescription>
-                        Keep the local WAV after a meeting ends so speaker diarization can run.
-                      </FieldDescription>
-                    </div>
-                    <Switch
-                      aria-label="Save audio after meeting"
-                      checked={snapshot.generalDraft.saveAudioAfterMeeting}
-                      disabled={snapshot.generalBusy}
-                      onCheckedChange={(checked) => {
-                        appStore.setSaveAudioAfterMeeting(checked);
-                      }}
-                    />
-                  </div>
-                  {!snapshot.generalDraft.saveAudioAfterMeeting ? (
+                <Field className="gap-3">
+                  <FieldLabel>Save audio after meeting</FieldLabel>
+                  <SettingsSelect
+                    ariaLabel="Save audio after meeting"
+                    value={snapshot.generalDraft.audioRetention}
+                    onChange={(nextValue) => {
+                      appStore.setAudioRetention(nextValue as AudioRetentionPolicy);
+                    }}
+                    options={audioRetentionOptions}
+                    placeholder="Select retention"
+                    disabled={snapshot.generalBusy}
+                  />
+                  <FieldDescription>
+                    Choose how long unsigned Char keeps local meeting audio available for diarization.
+                  </FieldDescription>
+                  {snapshot.generalDraft.audioRetention === "none" ? (
                     <FieldDescription>
-                      Meetings recorded while this is off will delete their audio when they finish, so
-                      diarization stays disabled for them.
+                      Selecting Don&apos;t save disables diarization because there is no retained meeting
+                      audio to process.
                     </FieldDescription>
                   ) : null}
                 </Field>

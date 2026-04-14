@@ -129,8 +129,11 @@ struct SaveGeneralSettingsInput {
     main_language: String,
     spoken_languages: Vec<String>,
     timezone: String,
-    #[serde(default = "default_save_audio_after_meeting")]
-    save_audio_after_meeting: bool,
+    #[serde(
+        default = "default_audio_retention_policy",
+        deserialize_with = "deserialize_audio_retention_policy"
+    )]
+    audio_retention: AudioRetentionPolicy,
 }
 
 #[derive(Clone, Deserialize)]
@@ -168,8 +171,39 @@ fn default_diarization_enabled() -> bool {
     true
 }
 
-fn default_save_audio_after_meeting() -> bool {
-    true
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+enum AudioRetentionPolicy {
+    None,
+    OneDay,
+    ThreeDays,
+    OneWeek,
+    OneMonth,
+}
+
+fn default_audio_retention_policy() -> AudioRetentionPolicy {
+    AudioRetentionPolicy::OneMonth
+}
+
+fn deserialize_audio_retention_policy<'de, D>(
+    deserializer: D,
+) -> Result<AudioRetentionPolicy, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum RawAudioRetentionPolicy {
+        Policy(AudioRetentionPolicy),
+        LegacyBool(bool),
+    }
+
+    match Option::<RawAudioRetentionPolicy>::deserialize(deserializer)? {
+        Some(RawAudioRetentionPolicy::Policy(policy)) => Ok(policy),
+        Some(RawAudioRetentionPolicy::LegacyBool(true)) => Ok(AudioRetentionPolicy::OneMonth),
+        Some(RawAudioRetentionPolicy::LegacyBool(false)) => Ok(AudioRetentionPolicy::None),
+        None => Ok(default_audio_retention_policy()),
+    }
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -202,8 +236,12 @@ struct StoredGeneralSettings {
     spoken_languages: Vec<String>,
     #[serde(default)]
     timezone: String,
-    #[serde(default = "default_save_audio_after_meeting")]
-    save_audio_after_meeting: bool,
+    #[serde(
+        alias = "saveAudioAfterMeeting",
+        default = "default_audio_retention_policy",
+        deserialize_with = "deserialize_audio_retention_policy"
+    )]
+    audio_retention: AudioRetentionPolicy,
 }
 
 impl Default for StoredGeneralSettings {
@@ -212,7 +250,7 @@ impl Default for StoredGeneralSettings {
             main_language: String::new(),
             spoken_languages: Vec::new(),
             timezone: String::new(),
-            save_audio_after_meeting: true,
+            audio_retention: AudioRetentionPolicy::OneMonth,
         }
     }
 }
@@ -324,7 +362,7 @@ struct GeneralSettingsState {
     main_language: String,
     spoken_languages: Vec<String>,
     timezone: String,
-    save_audio_after_meeting: bool,
+    audio_retention: AudioRetentionPolicy,
 }
 
 #[derive(Serialize)]
@@ -437,7 +475,7 @@ impl StoredGeneralSettings {
             main_language,
             spoken_languages,
             timezone: input.timezone.trim().to_string(),
-            save_audio_after_meeting: input.save_audio_after_meeting,
+            audio_retention: input.audio_retention,
         }
     }
 }
@@ -1410,7 +1448,7 @@ fn build_general_settings_state(
             .map(str::to_string)
             .collect(),
         timezone: settings.timezone.trim().to_string(),
-        save_audio_after_meeting: settings.save_audio_after_meeting,
+        audio_retention: settings.audio_retention,
     })
 }
 

@@ -40,6 +40,7 @@ export type Meeting = {
   status: MeetingStatus;
   transcript: TranscriptEntry[];
   audioPath: string;
+  audioSavedAt: string | null;
   requestedSpeakerCount: number | null;
   diarizationSegments: DiarizationSegment[];
   speakerLabels: Record<string, string>;
@@ -113,11 +114,18 @@ export type DiarizationSettings = {
   status: string;
 };
 
+export type AudioRetentionPolicy =
+  | "none"
+  | "oneDay"
+  | "threeDays"
+  | "oneWeek"
+  | "oneMonth";
+
 export type GeneralSettings = {
   mainLanguage: string;
   spokenLanguages: string[];
   timezone: string;
-  saveAudioAfterMeeting: boolean;
+  audioRetention: AudioRetentionPolicy;
 };
 
 type GeneralDraft = GeneralSettings;
@@ -414,7 +422,7 @@ function emptyGeneralDraft(): GeneralDraft {
     mainLanguage: defaultMainLanguage(),
     spokenLanguages: [],
     timezone: "",
-    saveAudioAfterMeeting: true,
+    audioRetention: "oneMonth",
   };
 }
 
@@ -496,7 +504,7 @@ function syncGeneralDraft(settings: GeneralSettings) {
     mainLanguage,
     spokenLanguages: normalizeSpokenLanguages(settings.spokenLanguages, mainLanguage),
     timezone: settings.timezone.trim(),
-    saveAudioAfterMeeting: settings.saveAudioAfterMeeting,
+    audioRetention: settings.audioRetention,
   };
 }
 
@@ -562,6 +570,12 @@ function normalizeMeeting(value: unknown): Meeting | null {
     status: candidate.status,
     transcript: normalizeTranscriptEntries(candidate.transcript),
     audioPath: typeof candidate.audioPath === "string" ? candidate.audioPath : "",
+    audioSavedAt:
+      typeof candidate.audioSavedAt === "string" && candidate.audioSavedAt.length > 0
+        ? candidate.audioSavedAt
+        : typeof candidate.audioPath === "string" && candidate.audioPath.trim().length > 0
+          ? candidate.updatedAt
+          : null,
     requestedSpeakerCount: normalizeRequestedSpeakerCount(candidate.requestedSpeakerCount),
     diarizationSegments,
     speakerLabels: normalizeSpeakerLabels(candidate.speakerLabels),
@@ -1181,28 +1195,106 @@ function activeTimezone() {
   return value || undefined;
 }
 
-function shouldSaveAudioAfterMeeting() {
-  return state.generalDraft.saveAudioAfterMeeting;
+function normalizeAudioRetentionPolicy(value: unknown): AudioRetentionPolicy {
+  if (
+    value === "none" ||
+    value === "oneDay" ||
+    value === "threeDays" ||
+    value === "oneWeek" ||
+    value === "oneMonth"
+  ) {
+    return value;
+  }
+
+  if (value === false) {
+    return "none";
+  }
+
+  return "oneMonth";
 }
 
-function withoutRetainedMeetingAudio(meeting: Meeting) {
+function currentAudioRetentionPolicy() {
+  return normalizeAudioRetentionPolicy(state.generalDraft.audioRetention);
+}
+
+function audioRetentionDurationMs(policy: AudioRetentionPolicy) {
+  switch (policy) {
+    case "none":
+      return 0;
+    case "oneDay":
+      return 24 * 60 * 60 * 1000;
+    case "threeDays":
+      return 3 * 24 * 60 * 60 * 1000;
+    case "oneWeek":
+      return 7 * 24 * 60 * 60 * 1000;
+    case "oneMonth":
+      return 30 * 24 * 60 * 60 * 1000;
+  }
+}
+
+function shouldRetainMeetingAudio(policy: AudioRetentionPolicy) {
+  return policy !== "none";
+}
+
+function getMeetingAudioSavedAt(meeting: Meeting) {
+  const savedAt = meeting.audioSavedAt?.trim();
+  if (savedAt) {
+    return savedAt;
+  }
+
+  return meeting.audioPath.trim() ? meeting.updatedAt : null;
+}
+
+function meetingAudioExpired(meeting: Meeting, policy: AudioRetentionPolicy, nowMs = Date.now()) {
+  if (meeting.status !== "done" || !meeting.audioPath.trim()) {
+    return false;
+  }
+
+  if (!shouldRetainMeetingAudio(policy)) {
+    return true;
+  }
+
+  const savedAt = getMeetingAudioSavedAt(meeting);
+  if (!savedAt) {
+    return false;
+  }
+
+  const savedAtMs = Date.parse(savedAt);
+  if (!Number.isFinite(savedAtMs)) {
+    return false;
+  }
+
+  return nowMs >= savedAtMs + audioRetentionDurationMs(policy);
+}
+
+function withoutRetainedMeetingAudio(
+  meeting: Meeting,
+  options: {
+    clearDiarization?: boolean;
+  } = {},
+) {
   const audioPath = meeting.audioPath.trim();
   if (!audioPath) {
     return {
-      meeting,
+      meeting: {
+        ...meeting,
+        audioSavedAt: null,
+      },
       deletedAudioPath: null,
     };
   }
 
+  const clearDiarization = options.clearDiarization === true;
   return {
     meeting: {
       ...meeting,
       audioPath: "",
-      diarizationSegments: [],
-      speakerLabels: {},
-      diarizationSpeakerCount: 0,
-      diarizationPipelineSource: null,
-      diarizationRanAt: null,
+      audioSavedAt: null,
+      diarizationSegments: clearDiarization ? [] : meeting.diarizationSegments,
+      speakerLabels: clearDiarization ? {} : meeting.speakerLabels,
+      diarizationSpeakerCount: clearDiarization ? 0 : meeting.diarizationSpeakerCount,
+      diarizationPipelineSource: clearDiarization ? null : meeting.diarizationPipelineSource,
+      diarizationRanAt: clearDiarization ? null : meeting.diarizationRanAt,
     },
     deletedAudioPath: audioPath,
   };
@@ -1489,6 +1581,7 @@ function createMeeting(meetingId = crypto.randomUUID(), audioPath = "") {
     status: "live",
     transcript: [],
     audioPath: audioPath.trim(),
+    audioSavedAt: null,
     requestedSpeakerCount: null,
     diarizationSegments: [],
     speakerLabels: {},
@@ -2013,6 +2106,8 @@ function finalizeLiveTranscript(markDone = false) {
   }
 
   let audioPathToDelete: string | null = null;
+  const finishedAt = new Date().toISOString();
+  const audioRetention = currentAudioRetentionPolicy();
 
   updateMeeting(meeting.id, (current) => {
     let transcript = current.transcript;
@@ -2034,11 +2129,14 @@ function finalizeLiveTranscript(markDone = false) {
       summaryProviderLabel: transcriptChanged ? null : current.summaryProviderLabel,
       summaryModel: transcriptChanged ? null : current.summaryModel,
       summaryUpdatedAt: transcriptChanged ? null : current.summaryUpdatedAt,
-      updatedAt: new Date().toISOString(),
+      updatedAt: finishedAt,
+      audioSavedAt: markDone && shouldRetainMeetingAudio(audioRetention) ? finishedAt : current.audioSavedAt,
     };
 
-    if (markDone && !shouldSaveAudioAfterMeeting()) {
-      const retention = withoutRetainedMeetingAudio(nextMeeting);
+    if (markDone && !shouldRetainMeetingAudio(audioRetention)) {
+      const retention = withoutRetainedMeetingAudio(nextMeeting, {
+        clearDiarization: true,
+      });
       nextMeeting = retention.meeting;
       audioPathToDelete = retention.deletedAudioPath;
     }
@@ -2172,12 +2270,43 @@ async function deleteMeetingAudioQuietly(path: string | null) {
   } catch {}
 }
 
+async function purgeExpiredMeetingAudio(policy = currentAudioRetentionPolicy()) {
+  const audioPathsToDelete: string[] = [];
+  const nowMs = Date.now();
+  let changed = false;
+
+  state = {
+    ...state,
+    meetings: state.meetings.map((meeting) => {
+      if (!meetingAudioExpired(meeting, policy, nowMs)) {
+        return meeting;
+      }
+
+      const retention = withoutRetainedMeetingAudio(meeting);
+      if (!retention.deletedAudioPath) {
+        return meeting;
+      }
+
+      changed = true;
+      audioPathsToDelete.push(retention.deletedAudioPath);
+      return retention.meeting;
+    }),
+  };
+
+  if (changed) {
+    persistMeetings();
+    emit();
+  }
+
+  await Promise.all(audioPathsToDelete.map((path) => deleteMeetingAudioQuietly(path)));
+}
+
 async function reconcilePersistedLiveMeetings() {
   const liveMeetings = sortedMeetings(
     state.meetings.filter((meeting) => meeting.status === "live"),
   );
   let snapshot: LiveTranscriptionState;
-  let saveAudioAfterMeeting = true;
+  let audioRetention: AudioRetentionPolicy = "oneMonth";
 
   try {
     snapshot = await invoke<LiveTranscriptionState>("live_transcription_state");
@@ -2186,9 +2315,10 @@ async function reconcilePersistedLiveMeetings() {
   }
 
   try {
-    saveAudioAfterMeeting =
-      state.generalSettings?.saveAudioAfterMeeting ??
-      (await invoke<GeneralSettings>("general_settings_state")).saveAudioAfterMeeting;
+    audioRetention = normalizeAudioRetentionPolicy(
+      state.generalSettings?.audioRetention ??
+        (await invoke<GeneralSettings>("general_settings_state")).audioRetention,
+    );
   } catch {}
 
   const activeMeetingId = snapshot.running ? liveMeetings[0]?.id ?? null : null;
@@ -2225,10 +2355,13 @@ async function reconcilePersistedLiveMeetings() {
       ...meeting,
       status: "done" as const,
       updatedAt: finishedAt,
+      audioSavedAt: shouldRetainMeetingAudio(audioRetention) ? finishedAt : meeting.audioSavedAt,
     };
 
-    if (!saveAudioAfterMeeting) {
-      const retention = withoutRetainedMeetingAudio(nextMeeting);
+    if (!shouldRetainMeetingAudio(audioRetention)) {
+      const retention = withoutRetainedMeetingAudio(nextMeeting, {
+        clearDiarization: true,
+      });
       nextMeeting = retention.meeting;
       if (retention.deletedAudioPath) {
         audioPathsToDelete.push(retention.deletedAudioPath);
@@ -2369,6 +2502,7 @@ async function toggleMeetingStatus(meetingId: string) {
     updateMeeting(meeting.id, (current) => ({
       ...current,
       audioPath: snapshot.audioPath.trim() || current.audioPath,
+      audioSavedAt: null,
       status: "live",
       updatedAt: new Date().toISOString(),
     }));
@@ -2566,7 +2700,7 @@ async function saveGeneralSettings() {
         mainLanguage,
         spokenLanguages,
         timezone: state.generalDraft.timezone.trim(),
-        saveAudioAfterMeeting: state.generalDraft.saveAudioAfterMeeting,
+        audioRetention: state.generalDraft.audioRetention,
       },
     });
 
@@ -2576,6 +2710,9 @@ async function saveGeneralSettings() {
       generalNote: "",
     });
     await refreshModelSettings(true);
+    if (!isSettingsWindow) {
+      await purgeExpiredMeetingAudio(generalSettings.audioRetention);
+    }
   } catch (error) {
     patch({
       generalNote: `Settings save failed: ${String(error)}`,
@@ -2723,7 +2860,7 @@ function handleAppFocus() {
     refreshManagedModelDownloadState(true),
     refreshModelSettings(true),
     refreshDiarizationSettings(true),
-  ]);
+  ]).then(() => purgeExpiredMeetingAudio());
 }
 
 async function handleShortcutStartMeeting() {
@@ -2896,11 +3033,11 @@ function setTimezone(timezone: string) {
   void saveGeneralSettings();
 }
 
-function setSaveAudioAfterMeeting(saveAudioAfterMeeting: boolean) {
+function setAudioRetention(audioRetention: AudioRetentionPolicy) {
   patch({
     generalDraft: {
       ...state.generalDraft,
-      saveAudioAfterMeeting,
+      audioRetention,
     },
     generalNote: "",
   });
@@ -3099,6 +3236,7 @@ async function start() {
     refreshModelSettings(true),
     refreshDiarizationSettings(true),
   ]);
+  await purgeExpiredMeetingAudio();
   patch({ initialized: true });
 }
 
@@ -3122,7 +3260,7 @@ export const appStore = {
   setSelectedModel,
   setMainLanguage,
   setTimezone,
-  setSaveAudioAfterMeeting,
+  setAudioRetention,
   addSpokenLanguage,
   removeSpokenLanguage,
   setSummaryProvider,
