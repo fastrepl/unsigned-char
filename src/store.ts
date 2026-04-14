@@ -1506,37 +1506,6 @@ function createMeeting(meetingId = crypto.randomUUID(), audioPath = "") {
   return meeting;
 }
 
-function discardMeeting(meetingId: string) {
-  const deletedActiveMeeting = currentMeetingIdFromHash() === meetingId;
-  const clearedRecordingMeeting = state.recordingMeetingId === meetingId;
-
-  clearMeetingMarkdownSync(meetingId);
-
-  state = {
-    ...state,
-    meetings: state.meetings.filter((candidate) => candidate.id !== meetingId),
-    recordingMeetingId: clearedRecordingMeeting ? null : state.recordingMeetingId,
-    transcriptionRunning: clearedRecordingMeeting ? false : state.transcriptionRunning,
-    transcriptionStopping: clearedRecordingMeeting ? false : state.transcriptionStopping,
-    liveTranscriptText: clearedRecordingMeeting ? "" : state.liveTranscriptText,
-    liveTranscriptEntries: clearedRecordingMeeting ? [] : state.liveTranscriptEntries,
-    liveTranscriptionMode: clearedRecordingMeeting ? null : state.liveTranscriptionMode,
-    meetingNote: deletedActiveMeeting ? "" : state.meetingNote,
-    diarizationMeetingId:
-      state.diarizationMeetingId === meetingId ? null : state.diarizationMeetingId,
-    diarizationIndicatorMinimized:
-      state.diarizationMeetingId === meetingId ? false : state.diarizationIndicatorMinimized,
-    diarizationBannerMessage:
-      state.diarizationMeetingId === meetingId ? null : state.diarizationBannerMessage,
-  };
-  persistMeetings();
-  emit();
-
-  if (deletedActiveMeeting) {
-    setHashRoute("/");
-  }
-}
-
 function queueMeetingAutoDiarization(meetingId: string) {
   const meeting = getMeeting(meetingId);
   if (!meeting || !meeting.audioPath.trim() || !state.diarizationSettings?.enabled) {
@@ -1813,6 +1782,10 @@ async function refreshManagedModelDownloadState(silent = false) {
   }
 }
 
+async function refreshTranscriptionSetupState() {
+  await Promise.all([refreshManagedModelDownloadState(true), refreshModelSettings(true)]);
+}
+
 async function refreshDiarizationSettings(silent = false) {
   try {
     const diarizationSettings = await invoke<DiarizationSettings>("diarization_settings_state");
@@ -1863,7 +1836,7 @@ async function refreshSettingsWindowData(silent = false) {
 }
 
 async function ensureModelReady() {
-  await refreshModelSettings(true);
+  await refreshTranscriptionSetupState();
 
   if (!state.modelSettings) {
     throw new Error("Model settings are still loading.");
@@ -2285,8 +2258,6 @@ async function startMeeting() {
     return null;
   }
 
-  let finishStartingInBackground = false;
-
   patch({
     startMeetingBusy: true,
     permissionNote: "",
@@ -2300,50 +2271,20 @@ async function startMeeting() {
     await prepareMeetingPermissions();
     await stopActiveRecordingIfNeeded();
     patch({ transcriptionBusy: true });
-    const meeting = createMeeting();
-
-    void (async () => {
-      try {
-        const snapshot = await startLiveTranscriptionSession(meeting.id);
-        const nextAudioPath = snapshot.audioPath.trim();
-        updateMeeting(meeting.id, (current) => {
-          if (current.audioPath === nextAudioPath) {
-            return current;
-          }
-
-          return {
-            ...current,
-            audioPath: nextAudioPath,
-            updatedAt: current.updatedAt,
-          };
-        });
-      } catch (error) {
-        discardMeeting(meeting.id);
-        patch({
-          permissionNote: error instanceof Error ? error.message : String(error),
-        });
-      } finally {
-        patch({
-          transcriptionBusy: false,
-          startMeetingBusy: false,
-        });
-      }
-    })();
-
-    finishStartingInBackground = true;
-    return meeting;
+    const meetingId = crypto.randomUUID();
+    const snapshot = await startLiveTranscriptionSession(meetingId);
+    return createMeeting(meetingId, snapshot.audioPath.trim());
   } catch (error) {
+    await refreshTranscriptionSetupState();
     patch({
       permissionNote: error instanceof Error ? error.message : String(error),
     });
     return null;
   } finally {
-    if (!finishStartingInBackground) {
-      patch({
-        transcriptionBusy: false,
-        startMeetingBusy: false,
-      });
-    }
+    patch({
+      transcriptionBusy: false,
+      startMeetingBusy: false,
+    });
   }
 }
 
@@ -2389,6 +2330,7 @@ async function toggleMeetingStatus(meetingId: string) {
       updatedAt: new Date().toISOString(),
     }));
   } catch (error) {
+    await refreshTranscriptionSetupState();
     patch({
       meetingNote: error instanceof Error ? error.message : String(error),
     });

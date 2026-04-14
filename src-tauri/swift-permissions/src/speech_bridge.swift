@@ -69,31 +69,6 @@ private enum SpeechModelKind: String, CaseIterable {
     self == .parakeetStreaming
   }
 
-  var requiredRelativePaths: [String] {
-    switch self {
-    case .parakeetStreaming, .parakeetBatch:
-      return [
-        "config.json",
-        "vocab.json",
-        "encoder.mlmodelc",
-        "decoder.mlmodelc",
-        "joint.mlmodelc",
-      ]
-    case .omnilingual:
-      return [
-        "config.json",
-        "tokenizer.model",
-        "omnilingual-ctc-300m-int8.mlpackage",
-      ]
-    case .qwen3Small, .qwen3Large:
-      return [
-        "vocab.json",
-        "merges.txt",
-        "tokenizer_config.json",
-      ]
-    }
-  }
-
   func cacheDirectoryURL() throws -> URL {
     try HuggingFaceDownloader.getCacheDirectory(for: repo)
   }
@@ -107,26 +82,30 @@ private enum SpeechModelKind: String, CaseIterable {
       return false
     }
 
-    let fileManager = FileManager.default
-    for relativePath in requiredRelativePaths {
-      if !fileManager.fileExists(atPath: directory.appendingPathComponent(relativePath).path) {
-        return false
-      }
+    switch self {
+    case .parakeetStreaming, .parakeetBatch:
+      return Self.regularFileExists(at: directory.appendingPathComponent("config.json"))
+        && Self.regularFileExists(at: directory.appendingPathComponent("vocab.json"))
+        && Self.compiledCoreMLModelReady(at: directory.appendingPathComponent("encoder.mlmodelc"))
+        && Self.compiledCoreMLModelReady(at: directory.appendingPathComponent("decoder.mlmodelc"))
+        && Self.compiledCoreMLModelReady(at: directory.appendingPathComponent("joint.mlmodelc"))
+    case .omnilingual:
+      return Self.regularFileExists(at: directory.appendingPathComponent("config.json"))
+        && Self.regularFileExists(at: directory.appendingPathComponent("tokenizer.model"))
+        && Self.directoryContainsRegularFile(
+          at: directory.appendingPathComponent("omnilingual-ctc-300m-int8.mlpackage")
+        )
+    case .qwen3Small, .qwen3Large:
+      return Self.regularFileExists(at: directory.appendingPathComponent("vocab.json"))
+        && Self.regularFileExists(at: directory.appendingPathComponent("merges.txt"))
+        && Self.regularFileExists(at: directory.appendingPathComponent("tokenizer_config.json"))
+        && Self.directoryContainsFile(withExtension: "safetensors", in: directory)
     }
-
-    if self == .qwen3Small || self == .qwen3Large {
-      guard let contents = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-      else {
-        return false
-      }
-
-      return contents.contains { $0.pathExtension == "safetensors" }
-    }
-
-    return true
   }
 
   func load(progressHandler: ((Double, String) -> Void)?) async throws -> LoadedSpeechModel {
+    let offlineMode = filesReady()
+
     switch self {
     case .parakeetStreaming:
       return .streaming(
@@ -139,6 +118,7 @@ private enum SpeechModelKind: String, CaseIterable {
       return .parakeetBatch(
         try await ParakeetASRModel.fromPretrained(
           modelId: repo,
+          offlineMode: offlineMode,
           progressHandler: progressHandler
         )
       )
@@ -146,6 +126,7 @@ private enum SpeechModelKind: String, CaseIterable {
       return .omnilingual(
         try await OmnilingualASRModel.fromPretrained(
           modelId: repo,
+          offlineMode: offlineMode,
           progressHandler: progressHandler
         )
       )
@@ -153,10 +134,77 @@ private enum SpeechModelKind: String, CaseIterable {
       return .qwen3(
         try await Qwen3ASRModel.fromPretrained(
           modelId: repo,
+          offlineMode: offlineMode,
           progressHandler: progressHandler
         )
       )
     }
+  }
+
+  private static func regularFileExists(at url: URL) -> Bool {
+    var isDirectory = ObjCBool(false)
+    return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+      && !isDirectory.boolValue
+  }
+
+  private static func compiledCoreMLModelReady(at directory: URL) -> Bool {
+    var isDirectory = ObjCBool(false)
+    guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+      isDirectory.boolValue
+    else {
+      return false
+    }
+
+    return regularFileExists(at: directory.appendingPathComponent("model.mil"))
+      && directoryContainsRegularFile(at: directory.appendingPathComponent("weights"))
+  }
+
+  private static func directoryContainsFile(withExtension pathExtension: String, in directory: URL)
+    -> Bool
+  {
+    guard
+      let contents = try? FileManager.default.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: [.isRegularFileKey]
+      )
+    else {
+      return false
+    }
+
+    return contents.contains { candidate in
+      guard
+        candidate.pathExtension == pathExtension,
+        let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey])
+      else {
+        return false
+      }
+
+      return values.isRegularFile == true
+    }
+  }
+
+  private static func directoryContainsRegularFile(at directory: URL) -> Bool {
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: directory,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
+      return false
+    }
+
+    for case let candidate as URL in enumerator {
+      guard let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey]) else {
+        continue
+      }
+
+      if values.isRegularFile == true {
+        return true
+      }
+    }
+
+    return false
   }
 }
 

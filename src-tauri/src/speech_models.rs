@@ -298,26 +298,18 @@ pub fn mlx_runtime_is_available() -> bool {
 
 pub fn model_path_is_ready(model_id: SpeechModelId, path: &Path) -> bool {
     match model_id {
-        SpeechModelId::ParakeetStreaming | SpeechModelId::ParakeetBatch => required_files_present(
-            path,
-            &[
-                "config.json",
-                "vocab.json",
-                "encoder.mlmodelc",
-                "decoder.mlmodelc",
-                "joint.mlmodelc",
-            ],
-        ),
-        SpeechModelId::Omnilingual => required_files_present(
-            path,
-            &[
-                "config.json",
-                "tokenizer.model",
-                "omnilingual-ctc-300m-int8.mlpackage",
-            ],
-        ),
+        SpeechModelId::ParakeetStreaming | SpeechModelId::ParakeetBatch => {
+            required_regular_files_present(path, &["config.json", "vocab.json"])
+                && compiled_coreml_model_ready(&path.join("encoder.mlmodelc"))
+                && compiled_coreml_model_ready(&path.join("decoder.mlmodelc"))
+                && compiled_coreml_model_ready(&path.join("joint.mlmodelc"))
+        }
+        SpeechModelId::Omnilingual => {
+            required_regular_files_present(path, &["config.json", "tokenizer.model"])
+                && package_directory_ready(&path.join("omnilingual-ctc-300m-int8.mlpackage"))
+        }
         SpeechModelId::Qwen3Small | SpeechModelId::Qwen3Large => {
-            required_files_present(path, &["vocab.json", "merges.txt", "tokenizer_config.json"])
+            required_regular_files_present(path, &["vocab.json", "merges.txt", "tokenizer_config.json"])
                 && directory_contains_extension(path, "safetensors")
         }
     }
@@ -344,10 +336,35 @@ fn read_sysctl_value(name: &str) -> Option<String> {
     }
 }
 
-fn required_files_present(path: &Path, relative_paths: &[&str]) -> bool {
+fn required_regular_files_present(path: &Path, relative_paths: &[&str]) -> bool {
     relative_paths
         .iter()
-        .all(|relative_path| path.join(relative_path).exists())
+        .all(|relative_path| path.join(relative_path).is_file())
+}
+
+fn compiled_coreml_model_ready(path: &Path) -> bool {
+    path.is_dir()
+        && path.join("model.mil").is_file()
+        && directory_contains_regular_file(&path.join("weights"))
+}
+
+fn package_directory_ready(path: &Path) -> bool {
+    path.is_dir() && directory_contains_regular_file(path)
+}
+
+fn directory_contains_regular_file(path: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return false;
+    };
+
+    entries.flatten().any(|entry| {
+        let entry_path = entry.path();
+        match entry.file_type() {
+            Ok(file_type) if file_type.is_file() => true,
+            Ok(file_type) if file_type.is_dir() => directory_contains_regular_file(&entry_path),
+            _ => false,
+        }
+    })
 }
 
 fn directory_contains_extension(path: &Path, extension: &str) -> bool {
