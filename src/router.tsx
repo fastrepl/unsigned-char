@@ -554,7 +554,7 @@ function MainWindowCharBanner() {
       <div className="min-w-0">
         <span className="min-w-0">
           <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">
-            Better transcription
+            Try out Char
           </span>
           <span className="mt-1 block text-sm font-medium leading-5 text-white">
             If you want better transcription, start using Char.
