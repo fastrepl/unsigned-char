@@ -128,6 +128,17 @@ export type GeneralSettings = {
   audioRetention: AudioRetentionPolicy;
 };
 
+export type AudioDevice = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+};
+
+export type AudioDeviceSettings = {
+  inputDevices: AudioDevice[];
+  outputDevices: AudioDevice[];
+};
+
 type GeneralDraft = GeneralSettings;
 
 export type SummarySettings = {
@@ -204,6 +215,7 @@ type AppState = {
   modelDownload: ManagedModelDownloadState | null;
   diarizationSettings: DiarizationSettings | null;
   generalSettings: GeneralSettings | null;
+  audioDeviceSettings: AudioDeviceSettings | null;
   generalDraft: GeneralDraft;
   summarySettings: SummarySettings | null;
   summaryDraft: SummaryDraft;
@@ -342,6 +354,7 @@ let state: AppState = {
   modelDownload: null,
   diarizationSettings: null,
   generalSettings: null,
+  audioDeviceSettings: null,
   generalDraft: emptyGeneralDraft(),
   summarySettings: null,
   summaryDraft: emptySummaryDraft(),
@@ -1896,6 +1909,17 @@ async function refreshDiarizationSettings(silent = false) {
   }
 }
 
+async function refreshAudioDeviceSettings(silent = false) {
+  try {
+    const audioDeviceSettings = await invoke<AudioDeviceSettings>("audio_device_settings_state");
+    patch({ audioDeviceSettings });
+  } catch (error) {
+    if (!silent) {
+      patch({ generalNote: `Failed to load audio devices: ${String(error)}` });
+    }
+  }
+}
+
 async function refreshGeneralSettings(silent = false) {
   try {
     const generalSettings = await invoke<GeneralSettings>("general_settings_state");
@@ -1928,6 +1952,7 @@ async function refreshSummarySettings(silent = false) {
 async function refreshSettingsWindowData(silent = false) {
   await Promise.all([
     refreshGeneralSettings(silent),
+    refreshAudioDeviceSettings(silent),
     refreshSummarySettings(silent),
     refreshManagedModelDownloadState(silent),
     refreshModelSettings(silent),
@@ -2854,6 +2879,7 @@ function handleAppFocus() {
   }
 
   void Promise.all([
+    refreshAudioDeviceSettings(true),
     refreshGeneralSettings(true),
     refreshSummarySettings(true),
     refreshPermissions(true),
@@ -3044,6 +3070,46 @@ function setAudioRetention(audioRetention: AudioRetentionPolicy) {
   void saveGeneralSettings();
 }
 
+async function setAudioDevice(
+  command: "set_audio_input_device" | "set_audio_output_device",
+  deviceId: string,
+  label: string,
+) {
+  const normalizedDeviceId = deviceId.trim();
+  if (!normalizedDeviceId || state.generalBusy) {
+    return;
+  }
+
+  patch({
+    generalBusy: true,
+    generalNote: "",
+  });
+
+  try {
+    const audioDeviceSettings = await invoke<AudioDeviceSettings>(command, {
+      deviceId: normalizedDeviceId,
+    });
+    patch({
+      audioDeviceSettings,
+      generalNote: "",
+    });
+  } catch (error) {
+    patch({
+      generalNote: `${label} selection failed: ${String(error)}`,
+    });
+  } finally {
+    patch({ generalBusy: false });
+  }
+}
+
+function setAudioInputDevice(deviceId: string) {
+  void setAudioDevice("set_audio_input_device", deviceId, "Microphone");
+}
+
+function setAudioOutputDevice(deviceId: string) {
+  void setAudioDevice("set_audio_output_device", deviceId, "Speaker");
+}
+
 function addSpokenLanguage(language: string) {
   const nextLanguage = normalizeLanguageCode(language);
   if (!nextLanguage) {
@@ -3229,6 +3295,7 @@ async function start() {
   queueLoadedMeetingMarkdownSync();
   window.addEventListener("focus", handleAppFocus);
   await Promise.all([
+    refreshAudioDeviceSettings(true),
     refreshGeneralSettings(true),
     refreshSummarySettings(true),
     refreshPermissions(true),
@@ -3261,6 +3328,8 @@ export const appStore = {
   setMainLanguage,
   setTimezone,
   setAudioRetention,
+  setAudioInputDevice,
+  setAudioOutputDevice,
   addSpokenLanguage,
   removeSpokenLanguage,
   setSummaryProvider,

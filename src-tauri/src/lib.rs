@@ -34,6 +34,9 @@ use tauri::{
 };
 use tracing::{error, info, warn};
 
+#[cfg(target_os = "macos")]
+use cidre::{cf, core_audio as ca};
+
 const APP_STORAGE_DIR_NAME: &str = "unsigned char";
 const APP_DISPLAY_NAME: &str = "unsigned Char";
 const SETTINGS_CONFIG_FILE: &str = "settings.json";
@@ -363,6 +366,21 @@ struct GeneralSettingsState {
     spoken_languages: Vec<String>,
     timezone: String,
     audio_retention: AudioRetentionPolicy,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioDeviceState {
+    id: String,
+    name: String,
+    is_default: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioDeviceSettingsState {
+    input_devices: Vec<AudioDeviceState>,
+    output_devices: Vec<AudioDeviceState>,
 }
 
 #[derive(Serialize)]
@@ -790,6 +808,11 @@ fn general_settings_state<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+fn audio_device_settings_state() -> Result<AudioDeviceSettingsState, String> {
+    build_audio_device_settings_state()
+}
+
+#[tauri::command]
 fn summary_settings_state<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<SummarySettingsState, String> {
@@ -850,6 +873,20 @@ fn save_general_settings<R: tauri::Runtime>(
         "Saved general settings",
     );
     build_general_settings_state(&settings)
+}
+
+#[tauri::command]
+fn set_audio_input_device(device_id: String) -> Result<AudioDeviceSettingsState, String> {
+    set_default_audio_device(AudioDeviceDirection::Input, &device_id)?;
+    info!(device_id = %device_id, "Updated default input device");
+    build_audio_device_settings_state()
+}
+
+#[tauri::command]
+fn set_audio_output_device(device_id: String) -> Result<AudioDeviceSettingsState, String> {
+    set_default_audio_device(AudioDeviceDirection::Output, &device_id)?;
+    info!(device_id = %device_id, "Updated default output device");
+    build_audio_device_settings_state()
 }
 
 #[tauri::command]
@@ -1450,6 +1487,122 @@ fn build_general_settings_state(
         timezone: settings.timezone.trim().to_string(),
         audio_retention: settings.audio_retention,
     })
+}
+
+#[derive(Clone, Copy)]
+enum AudioDeviceDirection {
+    Input,
+    Output,
+}
+
+#[cfg(target_os = "macos")]
+fn audio_device_has_streams(device: &ca::Device, scope: ca::PropScope) -> bool {
+    let address = ca::PropSelector::DEVICE_STREAMS.addr(scope, ca::PropElement::MAIN);
+    device
+        .prop_size(&address)
+        .map(|size| size > 0)
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn list_audio_devices(direction: AudioDeviceDirection) -> Result<Vec<AudioDeviceState>, String> {
+    let scope = match direction {
+        AudioDeviceDirection::Input => ca::PropScope::INPUT,
+        AudioDeviceDirection::Output => ca::PropScope::OUTPUT,
+    };
+    let default_device_id = match direction {
+        AudioDeviceDirection::Input => ca::System::default_input_device()
+            .ok()
+            .map(|device| device.0 .0),
+        AudioDeviceDirection::Output => ca::System::default_output_device()
+            .ok()
+            .map(|device| device.0 .0),
+    };
+    let mut devices = Vec::new();
+    let ca_devices = ca::System::devices()
+        .map_err(|error| format!("Failed to enumerate audio devices: {error:?}"))?;
+
+    for device in ca_devices {
+        if !audio_device_has_streams(&device, scope) {
+            continue;
+        }
+
+        let Ok(name) = device.name() else {
+            continue;
+        };
+        let name = name.to_string();
+        if name.contains(audio_capture::SYSTEM_AUDIO_DEVICE_NAME) {
+            continue;
+        }
+
+        let Ok(uid) = device.uid() else {
+            continue;
+        };
+
+        devices.push(AudioDeviceState {
+            id: uid.to_string(),
+            name,
+            is_default: default_device_id.is_some_and(|id| id == device.0 .0),
+        });
+    }
+
+    devices.sort_by(|left, right| {
+        right
+            .is_default
+            .cmp(&left.is_default)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+
+    Ok(devices)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn list_audio_devices(_direction: AudioDeviceDirection) -> Result<Vec<AudioDeviceState>, String> {
+    Err("Audio device selection is only available on macOS.".to_string())
+}
+
+fn build_audio_device_settings_state() -> Result<AudioDeviceSettingsState, String> {
+    Ok(AudioDeviceSettingsState {
+        input_devices: list_audio_devices(AudioDeviceDirection::Input)?,
+        output_devices: list_audio_devices(AudioDeviceDirection::Output)?,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn set_default_audio_device(
+    direction: AudioDeviceDirection,
+    device_id: &str,
+) -> Result<(), String> {
+    let normalized_device_id = device_id.trim();
+    if normalized_device_id.is_empty() {
+        return Err("Audio device id is required.".to_string());
+    }
+
+    let uid = cf::String::from_str(normalized_device_id);
+    let device = ca::Device::with_uid(&uid)
+        .map_err(|error| format!("Failed to resolve audio device: {error:?}"))?;
+    if device.is_unknown() {
+        return Err("Audio device not found.".to_string());
+    }
+
+    let address = match direction {
+        AudioDeviceDirection::Input => ca::PropSelector::HW_DEFAULT_INPUT_DEVICE.global_addr(),
+        AudioDeviceDirection::Output => ca::PropSelector::HW_DEFAULT_OUTPUT_DEVICE.global_addr(),
+    };
+
+    ca::System::OBJ
+        .set_prop(&address, &device.0)
+        .map_err(|error| format!("Failed to set the default audio device: {error:?}"))?;
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_default_audio_device(
+    _direction: AudioDeviceDirection,
+    _device_id: &str,
+) -> Result<(), String> {
+    Err("Audio device selection is only available on macOS.".to_string())
 }
 
 fn build_summary_settings_state(
@@ -2612,10 +2765,13 @@ pub fn run() {
             delete_managed_model,
             diarization_settings_state,
             general_settings_state,
+            audio_device_settings_state,
             summary_settings_state,
             save_model_settings,
             save_diarization_settings,
             save_general_settings,
+            set_audio_input_device,
+            set_audio_output_device,
             save_summary_settings,
             generate_transcript_summary,
             run_local_diarization,

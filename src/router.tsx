@@ -1892,7 +1892,24 @@ function SettingsScreen() {
 
   const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const modelSettings = snapshot.modelSettings;
+  const audioDeviceSettings = snapshot.audioDeviceSettings;
   const timezoneOptions = getTimezoneOptions(snapshot);
+  const microphoneOptions = (audioDeviceSettings?.inputDevices ?? []).map(
+    (device): SearchableOption => ({
+      value: device.id,
+      label: device.name,
+    }),
+  );
+  const speakerOptions = (audioDeviceSettings?.outputDevices ?? []).map(
+    (device): SearchableOption => ({
+      value: device.id,
+      label: device.name,
+    }),
+  );
+  const selectedInputDeviceId =
+    audioDeviceSettings?.inputDevices.find((device) => device.isDefault)?.id ?? "";
+  const selectedOutputDeviceId =
+    audioDeviceSettings?.outputDevices.find((device) => device.isDefault)?.id ?? "";
   const modelReady = Boolean(modelSettings.selectedReady);
   const downloadStatus = snapshot.modelDownload?.status ?? "idle";
   const showModelDownloadGauge = snapshot.modelBusy || downloadStatus === "downloading";
@@ -2001,6 +2018,38 @@ function SettingsScreen() {
                     onRemove={appStore.removeSpokenLanguage}
                   />
                 </div>
+
+                <Field className="gap-3">
+                  <FieldLabel>Microphone</FieldLabel>
+                  <SettingsSelect
+                    ariaLabel="Microphone"
+                    value={selectedInputDeviceId}
+                    onChange={appStore.setAudioInputDevice}
+                    options={microphoneOptions}
+                    placeholder={
+                      audioDeviceSettings ? "Select microphone" : "Loading microphones..."
+                    }
+                    disabled={snapshot.generalBusy || microphoneOptions.length === 0}
+                  />
+                  <FieldDescription>
+                    Sets the macOS default input device used when unsigned Char starts recording.
+                  </FieldDescription>
+                </Field>
+
+                <Field className="gap-3">
+                  <FieldLabel>Speaker</FieldLabel>
+                  <SettingsSelect
+                    ariaLabel="Speaker"
+                    value={selectedOutputDeviceId}
+                    onChange={appStore.setAudioOutputDevice}
+                    options={speakerOptions}
+                    placeholder={audioDeviceSettings ? "Select speaker" : "Loading speakers..."}
+                    disabled={snapshot.generalBusy || speakerOptions.length === 0}
+                  />
+                  <FieldDescription>
+                    Sets the macOS default output device.
+                  </FieldDescription>
+                </Field>
 
                 <Field className="gap-3">
                   <FieldLabel>Save audio after meeting</FieldLabel>

@@ -17,7 +17,7 @@ const OUTPUT_CHUNK_SIZE: usize = AEC_FRAME_SIZE * 10;
 const JOINER_MAX_LAG: usize = 4;
 const JOINER_MAX_QUEUE_SIZE: usize = 30;
 const SESSION_POLL_INTERVAL: Duration = Duration::from_millis(200);
-const SYSTEM_AUDIO_DEVICE_NAME: &str = "unsigned char meeting system audio";
+pub(crate) const SYSTEM_AUDIO_DEVICE_NAME: &str = "unsigned char meeting system audio";
 
 pub struct LiveCaptureSession {
     running: Arc<AtomicBool>,
