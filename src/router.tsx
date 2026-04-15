@@ -33,6 +33,7 @@ import {
 
 import anthropicLogo from "./assets/provider-icons/anthropic.png";
 import brandWordmark from "./assets/brand-wordmark.svg";
+import charLogo from "./assets/char-logo.svg";
 import googleLogo from "./assets/provider-icons/google.png";
 import lmStudioLogo from "./assets/provider-icons/lmstudio.png";
 import metaLogo from "./assets/provider-icons/meta.png";
@@ -563,7 +564,7 @@ function MainWindowCharBanner() {
         <div className="mt-4 flex items-center gap-2" data-window-drag="false">
           <button
             type="button"
-            className="inline-flex h-8 items-center justify-center rounded-[var(--radius-control)] border border-white bg-white px-3 text-sm font-medium shadow-none transition-colors hover:bg-zinc-100 active:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950"
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-white bg-white px-3 text-sm font-medium shadow-none transition-colors hover:bg-zinc-100 active:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950"
             style={{ color: "#18181b", WebkitTextFillColor: "#18181b" }}
             onClick={() => {
               void invoke("open_char_website").catch((error) => {
@@ -571,6 +572,7 @@ function MainWindowCharBanner() {
               });
             }}
           >
+            <img src={charLogo} alt="" aria-hidden="true" className="h-3.5 w-auto shrink-0" />
             Start using
           </button>
           <Button
