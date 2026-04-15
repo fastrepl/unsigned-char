@@ -720,6 +720,11 @@ const audioRetentionOptions: readonly SearchableOption[] = [
         icon: "close",
         variant: "error",
       },
+      {
+        label: "Denoise",
+        icon: "close",
+        variant: "error",
+      },
     ],
     searchTerms: ["disable diarization", "do not save", "no audio"],
   },
