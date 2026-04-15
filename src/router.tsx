@@ -16,10 +16,10 @@ import {
   ChevronLeft,
   CircleAlert,
   Cloud,
-  Cpu,
   Globe2,
   PlugZap,
   RefreshCw,
+  Save,
   Trash2,
   Users,
 } from "lucide-react";
@@ -788,7 +788,7 @@ function SearchableOptionPrefix({
     cloud: <Cloud className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
     custom: <PlugZap className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
     disabled: <PlugZap className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
-    local: <Cpu className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
+    local: <Save className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
     omnilingual: <Globe2 className={iconClassName} strokeWidth={1.8} aria-hidden="true" />,
   } satisfies Record<NonNullable<SearchableOption["icon"]>, ReactNode>;
 
@@ -2278,6 +2278,7 @@ function SettingsScreen() {
     snapshot.summaryDraft.apiKeyPresent && !snapshot.summaryDraft.apiKeyDirty;
   const showSavedSummaryApiKeyMask =
     savedSummaryApiKey && !snapshot.summaryDraft.apiKey && !apiKeyFieldFocused;
+  const showSummaryBaseUrlField = selectedSummaryProvider?.id === "custom";
   const apiKeyPlaceholder = showSavedSummaryApiKeyMask
     ? ""
     : savedSummaryApiKey
@@ -2556,17 +2557,19 @@ function SettingsScreen() {
                       />
                     </Field>
 
-                    <Field>
-                      <FieldLabel>Base URL</FieldLabel>
-                      <Input
-                        value={snapshot.summaryDraft.baseUrl}
-                        onChange={(event) => {
-                          appStore.setSummaryBaseUrl(event.target.value);
-                        }}
-                        placeholder={selectedSummaryProvider?.defaultBaseUrl || "https://example.com/v1"}
-                        disabled={snapshot.summaryBusy}
-                      />
-                    </Field>
+                    {showSummaryBaseUrlField ? (
+                      <Field>
+                        <FieldLabel>Base URL</FieldLabel>
+                        <Input
+                          value={snapshot.summaryDraft.baseUrl}
+                          onChange={(event) => {
+                            appStore.setSummaryBaseUrl(event.target.value);
+                          }}
+                          placeholder={selectedSummaryProvider?.defaultBaseUrl || "https://example.com/v1"}
+                          disabled={snapshot.summaryBusy}
+                        />
+                      </Field>
+                    ) : null}
 
                     <Field>
                       <FieldLabel>API key</FieldLabel>
