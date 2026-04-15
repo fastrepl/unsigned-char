@@ -2593,78 +2593,85 @@ function SettingsScreen() {
                 </div>
               </CardHeader>
             <CardPanel className="grid gap-6 pt-0">
-                <Field className="gap-3">
-                  <FieldLabel>Provider</FieldLabel>
-                  <SettingsSelect
-                    ariaLabel="Summary provider"
-                    value={snapshot.summaryDraft.provider}
-                    onChange={appStore.setSummaryProvider}
-                    options={summaryProviderOptions}
-                    placeholder="Select provider"
-                    disabled={snapshot.summaryBusy}
-                  />
-                  {selectedSummaryProvider ? (
-                    <FieldDescription>{selectedSummaryProvider.help}</FieldDescription>
-                  ) : null}
-                </Field>
+                <div className="grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(15rem,0.85fr)] md:items-start">
+                  <Field className="gap-3">
+                    <FieldLabel>Provider</FieldLabel>
+                    <SettingsSelect
+                      ariaLabel="Summary provider"
+                      value={snapshot.summaryDraft.provider}
+                      onChange={appStore.setSummaryProvider}
+                      options={summaryProviderOptions}
+                      placeholder="Select provider"
+                      disabled={snapshot.summaryBusy}
+                    />
+                  </Field>
+
+                  <Field className="gap-3">
+                    <FieldLabel>Model</FieldLabel>
+                    {!snapshot.summaryDraft.provider ? (
+                      <Input value="" placeholder="Select provider first" disabled />
+                    ) : summaryModelPresets.length > 0 ? (
+                      <SettingsSelect
+                        ariaLabel="Summary model"
+                        value={
+                          summaryModelUsesCustomInput
+                            ? CUSTOM_SUMMARY_MODEL_OPTION_VALUE
+                            : selectedSummaryModelPreset?.value ?? ""
+                        }
+                        onChange={(nextValue) => {
+                          if (nextValue === CUSTOM_SUMMARY_MODEL_OPTION_VALUE) {
+                            setManualSummaryModelProvider(snapshot.summaryDraft.provider);
+                            if (!snapshot.summaryDraft.model.trim() || selectedSummaryModelPreset) {
+                              appStore.setSummaryModel("");
+                            }
+                            return;
+                          }
+
+                          setManualSummaryModelProvider(null);
+                          appStore.setSummaryModel(nextValue);
+                        }}
+                        options={summaryModelOptions}
+                        placeholder="Select model"
+                        disabled={snapshot.summaryBusy}
+                      />
+                    ) : (
+                      <Input
+                        value={snapshot.summaryDraft.model}
+                        onChange={(event) => {
+                          appStore.setSummaryModel(event.target.value);
+                        }}
+                        placeholder={summaryModelInputPlaceholder}
+                        disabled={snapshot.summaryBusy}
+                      />
+                    )}
+                  </Field>
+                </div>
+
+                {selectedSummaryProvider ? (
+                  <FieldDescription>{selectedSummaryProvider.help}</FieldDescription>
+                ) : null}
+
+                {snapshot.summaryDraft.provider && summaryModelPresets.length > 0 && summaryModelUsesCustomInput ? (
+                  <Field className="gap-3">
+                    <FieldLabel>Custom model ID</FieldLabel>
+                    <Input
+                      value={
+                        selectedSummaryModelPreset && !manualSummaryModelProvider
+                          ? ""
+                          : snapshot.summaryDraft.model
+                      }
+                      onChange={(event) => {
+                        setManualSummaryModelProvider(snapshot.summaryDraft.provider);
+                        appStore.setSummaryModel(event.target.value);
+                      }}
+                      placeholder={summaryModelInputPlaceholder}
+                      disabled={snapshot.summaryBusy}
+                    />
+                  </Field>
+                ) : null}
 
                 {snapshot.summaryDraft.provider ? (
                   <>
-                    <Field className="gap-3">
-                      <FieldLabel>Model</FieldLabel>
-                      {summaryModelPresets.length > 0 ? (
-                        <div className="space-y-3">
-                          <SettingsSelect
-                            ariaLabel="Summary model"
-                            value={
-                              summaryModelUsesCustomInput
-                                ? CUSTOM_SUMMARY_MODEL_OPTION_VALUE
-                                : selectedSummaryModelPreset?.value ?? ""
-                            }
-                            onChange={(nextValue) => {
-                              if (nextValue === CUSTOM_SUMMARY_MODEL_OPTION_VALUE) {
-                                setManualSummaryModelProvider(snapshot.summaryDraft.provider);
-                                if (!snapshot.summaryDraft.model.trim() || selectedSummaryModelPreset) {
-                                  appStore.setSummaryModel("");
-                                }
-                                return;
-                              }
-
-                              setManualSummaryModelProvider(null);
-                              appStore.setSummaryModel(nextValue);
-                            }}
-                            options={summaryModelOptions}
-                            placeholder="Select model"
-                            disabled={snapshot.summaryBusy}
-                          />
-                          {summaryModelUsesCustomInput ? (
-                            <Input
-                              value={
-                                selectedSummaryModelPreset && !manualSummaryModelProvider
-                                  ? ""
-                                  : snapshot.summaryDraft.model
-                              }
-                              onChange={(event) => {
-                                setManualSummaryModelProvider(snapshot.summaryDraft.provider);
-                                appStore.setSummaryModel(event.target.value);
-                              }}
-                              placeholder={summaryModelInputPlaceholder}
-                              disabled={snapshot.summaryBusy}
-                            />
-                          ) : null}
-                        </div>
-                      ) : (
-                        <Input
-                          value={snapshot.summaryDraft.model}
-                          onChange={(event) => {
-                            appStore.setSummaryModel(event.target.value);
-                          }}
-                          placeholder={summaryModelInputPlaceholder}
-                          disabled={snapshot.summaryBusy}
-                        />
-                      )}
-                    </Field>
-
                     {showSummaryBaseUrlField ? (
                       <Field>
                         <FieldLabel>Base URL</FieldLabel>
