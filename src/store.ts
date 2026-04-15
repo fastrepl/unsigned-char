@@ -1249,6 +1249,10 @@ function shouldRetainMeetingAudio(policy: AudioRetentionPolicy) {
   return policy !== "none";
 }
 
+function canRunMeetingAudioPostProcessing(meeting: Meeting) {
+  return meeting.audioPath.trim().length > 0;
+}
+
 function getMeetingAudioSavedAt(meeting: Meeting) {
   const savedAt = meeting.audioSavedAt?.trim();
   if (savedAt) {
@@ -1621,7 +1625,7 @@ function createMeeting(meetingId = crypto.randomUUID(), audioPath = "") {
 
 function queueMeetingAutoDiarization(meetingId: string) {
   const meeting = getMeeting(meetingId);
-  if (!meeting || !meeting.audioPath.trim() || !state.diarizationSettings?.enabled) {
+  if (!meeting || !canRunMeetingAudioPostProcessing(meeting) || !state.diarizationSettings?.enabled) {
     return;
   }
 
@@ -2549,6 +2553,13 @@ async function runMeetingDiarization(
 ) {
   const meeting = getMeeting(meetingId);
   if (!meeting || state.diarizationRunBusy) {
+    return;
+  }
+
+  if (!canRunMeetingAudioPostProcessing(meeting)) {
+    patch({
+      meetingNote: "Speaker diarization requires saved meeting audio. Choose an audio retention option other than Don't save.",
+    });
     return;
   }
 
