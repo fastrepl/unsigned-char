@@ -1,1 +1,1 @@
-unsigned Char 0.0.9 fixes meeting startup getting stuck in "Starting listening" and stops incomplete local model caches from being treated as ready.
+unsigned Char 0.0.10 adds a local speaker library, reruns diarization after participant edits, moves summary API keys into the macOS Keychain, and simplifies AI summary setup with cleaner provider/model controls and curated hosted-model presets.
