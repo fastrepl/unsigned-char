@@ -1961,7 +1961,14 @@ function SettingsScreen() {
                     onRemove={appStore.removeSpokenLanguage}
                   />
                 </div>
+              </CardPanel>
+            </Card>
 
+            <Card className="overflow-visible">
+              <CardHeader className="pb-2">
+                <CardTitle>Audio</CardTitle>
+              </CardHeader>
+              <CardPanel className="grid gap-6 pt-0">
                 <Field className="gap-3">
                   <FieldLabel>Microphone</FieldLabel>
                   <SettingsSelect
