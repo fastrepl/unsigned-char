@@ -575,7 +575,16 @@ type SearchableOption = {
   logoClassName?: string;
   badges?: readonly {
     label: string;
-    variant: "default" | "secondary" | "outline" | "success" | "warning" | "destructive" | "info";
+    icon?: "close";
+    variant:
+      | "default"
+      | "error"
+      | "secondary"
+      | "outline"
+      | "success"
+      | "warning"
+      | "destructive"
+      | "info";
   }[];
   searchTerms?: readonly string[];
 };
@@ -642,7 +651,8 @@ function SelectOptionContent({ option }: { option: SearchableOption }) {
         <span className="inline-flex shrink-0 items-center gap-1">
           {option.badges.map((badge) => (
             <Badge key={`${option.value}-${badge.label}`} variant={badge.variant} size="sm">
-              {badge.label}
+              <span>{badge.label}</span>
+              {badge.icon === "close" ? <IconClose /> : null}
             </Badge>
           ))}
         </span>
@@ -704,6 +714,13 @@ const audioRetentionOptions: readonly SearchableOption[] = [
     label: "Don't save",
     detail: "Off",
     icon: "disabled",
+    badges: [
+      {
+        label: "Diarization",
+        icon: "close",
+        variant: "error",
+      },
+    ],
     searchTerms: ["disable diarization", "do not save", "no audio"],
   },
   {
@@ -1996,9 +2013,16 @@ function SettingsScreen() {
                     Choose how long unsigned Char keeps local meeting audio available for diarization.
                   </FieldDescription>
                   {snapshot.generalDraft.audioRetention === "none" ? (
-                    <FieldDescription>
-                      Selecting Don&apos;t save disables diarization because there is no retained meeting
-                      audio to process.
+                    <FieldDescription className="flex items-start gap-2 rounded-[var(--radius-control)] border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm leading-6 text-rose-700">
+                      <CircleAlert
+                        aria-hidden="true"
+                        className="mt-1 size-4 shrink-0 text-rose-500"
+                        strokeWidth={1.8}
+                      />
+                      <span>
+                        Diarization won&apos;t run if you choose Don&apos;t save. unsigned Char needs
+                        retained meeting audio after the meeting ends to process speakers.
+                      </span>
                     </FieldDescription>
                   ) : null}
                 </Field>
