@@ -100,6 +100,7 @@ import {
 } from "./store";
 import {
   type MenuItemDef,
+  showNativeMenu,
   showNativeContextMenu,
 } from "./hooks/useNativeContextMenu";
 import {
@@ -122,6 +123,16 @@ function IconClose() {
         strokeWidth="1.4"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function IconMoreHorizontal() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="3" cy="8" r="1.25" fill="currentColor" />
+      <circle cx="8" cy="8" r="1.25" fill="currentColor" />
+      <circle cx="13" cy="8" r="1.25" fill="currentColor" />
     </svg>
   );
 }
@@ -1287,27 +1298,58 @@ function MeetingHeaderTimestampButton({
 }: {
   meeting: Pick<Meeting, "createdAt" | "updatedAt">;
 }) {
-  const [mode, setMode] = useState<"created" | "updated">("created");
-  const showingCreated = mode === "created";
-  const label = showingCreated ? "Created" : "Updated";
-  const nextLabel = showingCreated ? "updated" : "created";
-  const value = showingCreated ? meeting.createdAt : meeting.updatedAt;
-
   return (
-    <Button
-      variant="ghost"
-      size="xs"
-      className="rounded-full px-2.5 text-zinc-600 hover:bg-zinc-100 data-pressed:bg-zinc-100"
+    <div
+      className="group relative inline-flex h-10 min-w-[220px] items-center justify-center px-2.5 text-zinc-600"
       data-window-drag="false"
-      aria-label={`${label} ${formatDateTime(value)}. Click to show ${nextLabel}.`}
-      title={`Showing ${label.toLowerCase()} time. Click to show ${nextLabel}.`}
-      onClick={() => {
-        setMode((current) => (current === "created" ? "updated" : "created"));
-      }}
+      aria-label={`Created ${formatDateTime(meeting.createdAt)}. Hover to show updated ${formatDateTime(meeting.updatedAt)}.`}
+      title={`Updated ${formatDateTime(meeting.updatedAt)}`}
     >
-      <span className="font-medium text-zinc-500">{label}</span>
-      <span>{formatDateTime(value)}</span>
-    </Button>
+      <span className="text-[15px] font-medium tracking-[-0.01em] text-zinc-700 transition-opacity duration-150 group-hover:opacity-0">
+        {formatDateTime(meeting.createdAt)}
+      </span>
+      <span className="pointer-events-none absolute inset-x-2.5 top-1/2 -translate-y-1/2 text-center text-[15px] font-medium tracking-[-0.01em] text-zinc-700 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        {formatDateTime(meeting.updatedAt)}
+      </span>
+      <span className="pointer-events-none absolute left-1/2 top-full mt-0.5 -translate-x-1/2 text-[10px] font-medium tracking-[0.02em] text-zinc-400 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        updated
+      </span>
+    </div>
+  );
+}
+
+function MeetingHeaderMoreButton({
+  meeting,
+  deleteDisabled,
+  onDeleteRequested,
+}: {
+  meeting: Meeting;
+  deleteDisabled: boolean;
+  onDeleteRequested: (meeting: DeleteMeetingRequest) => void;
+}) {
+  return (
+    <div data-window-drag="false">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="shrink-0"
+        aria-label="More actions"
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          void showNativeMenu(
+            getMeetingActionMenuItems(meeting, deleteDisabled, onDeleteRequested),
+            {
+              at: {
+                x: rect.left,
+                y: rect.bottom + 6,
+              },
+            },
+          );
+        }}
+      >
+        <IconMoreHorizontal />
+      </Button>
+    </div>
   );
 }
 
@@ -1380,6 +1422,7 @@ function SpeakerLabelField({
 function MeetingScreen() {
   const snapshot = useAppState();
   const navigate = useNavigate();
+  const [meetingPendingDelete, setMeetingPendingDelete] = useState<DeleteMeetingRequest | null>(null);
   const { meetingId } = useParams({ from: "/meeting/$meetingId" });
   const transcriptScrollFade = useScrollFade<HTMLElement>({
     stickToBottom:
@@ -1432,6 +1475,12 @@ function MeetingScreen() {
   }
 
   const transcriptEntries = getMeetingTranscriptEntries(meeting);
+  const deleteDisabled = isMeetingDeleteDisabled(
+    meeting,
+    snapshot.transcriptionBusy,
+    snapshot.transcriptionRunning,
+    snapshot.recordingMeetingId,
+  );
   const isStartingMeeting =
     meeting.status === "live" &&
     snapshot.startMeetingBusy &&
@@ -1525,7 +1574,11 @@ function MeetingScreen() {
             <MeetingHeaderTimestampButton key={meeting.id} meeting={meeting} />
           </div>
 
-          <div className="size-8 shrink-0" aria-hidden="true" />
+          <MeetingHeaderMoreButton
+            meeting={meeting}
+            deleteDisabled={deleteDisabled}
+            onDeleteRequested={setMeetingPendingDelete}
+          />
         </div>
 
         <div className="flex items-center gap-3">
@@ -1758,6 +1811,17 @@ function MeetingScreen() {
           />
         </div>
       </div>
+      <DeleteMeetingDialog
+        meeting={meetingPendingDelete}
+        onCancel={() => {
+          setMeetingPendingDelete(null);
+        }}
+        onConfirm={(meetingId) => {
+          setMeetingPendingDelete(null);
+          navigate({ to: "/" });
+          void appStore.deleteMeeting(meetingId);
+        }}
+      />
     </section>
   );
 }
