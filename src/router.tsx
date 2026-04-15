@@ -2590,7 +2590,7 @@ function SettingsScreen() {
                 </div>
               </CardHeader>
             <CardPanel className="grid gap-6 pt-0">
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1.35fr)_minmax(15rem,0.85fr)] md:items-start">
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,1.35fr)_minmax(14rem,0.85fr)] sm:items-start">
                   <div className="min-w-0">
                     <SettingsSelect
                       ariaLabel="Summary provider"
@@ -2641,10 +2641,6 @@ function SettingsScreen() {
                     )}
                   </div>
                 </div>
-
-                {selectedSummaryProvider ? (
-                  <p className="text-muted-foreground text-xs">{selectedSummaryProvider.help}</p>
-                ) : null}
 
                 {snapshot.summaryDraft.provider && summaryModelPresets.length > 0 && summaryModelUsesCustomInput ? (
                   <Field className="gap-3">
