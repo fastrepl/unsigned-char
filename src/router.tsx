@@ -870,7 +870,6 @@ const summaryProviderOptions: readonly SearchableOption[] = [
   ...SUMMARY_PROVIDERS.map((provider): SearchableOption => ({
     value: provider.id,
     label: provider.label,
-    detail: provider.detail,
     icon: provider.id === "custom" ? "custom" : undefined,
     logoSrc: summaryProviderLogos[provider.id],
     logoClassName: summaryProviderLogoClassNames[provider.id],
@@ -2541,6 +2540,9 @@ function SettingsScreen() {
                     placeholder="Select provider"
                     disabled={snapshot.summaryBusy}
                   />
+                  {selectedSummaryProvider ? (
+                    <FieldDescription>{selectedSummaryProvider.help}</FieldDescription>
+                  ) : null}
                 </Field>
 
                 {snapshot.summaryDraft.provider ? (
