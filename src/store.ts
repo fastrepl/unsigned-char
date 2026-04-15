@@ -3973,12 +3973,13 @@ function removeSpokenLanguage(language: string) {
 function setSummaryProvider(provider: string) {
   const nextProvider = provider.trim();
   const restoreSaved = state.summarySettings?.provider === nextProvider;
+  const allowsBaseUrl = nextProvider === "custom";
 
   patch({
     summaryDraft: {
       provider: nextProvider,
       model: restoreSaved ? state.summarySettings?.model ?? "" : "",
-      baseUrl: restoreSaved ? state.summarySettings?.baseUrl ?? "" : "",
+      baseUrl: allowsBaseUrl && restoreSaved ? state.summarySettings?.baseUrl ?? "" : "",
       apiKey: "",
       apiKeyDirty: false,
       apiKeyPresent: restoreSaved ? Boolean(state.summarySettings?.apiKeyPresent) : false,

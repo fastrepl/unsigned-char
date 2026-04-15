@@ -566,7 +566,7 @@ impl StoredSummarySettings {
         self.model = input.model.trim().to_string();
 
         let base_url = input.base_url.trim();
-        if provider.is_empty() || base_url.is_empty() {
+        if provider != "custom" || base_url.is_empty() {
             self.base_url.clear();
             self.base_url_provider.clear();
         } else {
@@ -584,6 +584,18 @@ impl StoredSummarySettings {
 
         self.base_url.trim().to_string()
     }
+}
+
+fn normalize_summary_storage(settings: &mut StoredSummarySettings) -> bool {
+    if settings.provider != "custom"
+        && (!settings.base_url.is_empty() || !settings.base_url_provider.is_empty())
+    {
+        settings.base_url.clear();
+        settings.base_url_provider.clear();
+        return true;
+    }
+
+    false
 }
 
 fn summary_api_key_account(provider: &str) -> Option<String> {
@@ -693,6 +705,7 @@ fn migrate_stored_secrets<R: tauri::Runtime>(
     settings: &mut StoredAppSettings,
 ) -> Result<bool, String> {
     let mut changed = false;
+    changed |= normalize_summary_storage(&mut settings.summary);
     changed |= migrate_summary_secrets(app, &mut settings.summary)?;
     changed |= migrate_diarization_secrets(app, &mut settings.diarization)?;
     Ok(changed)
