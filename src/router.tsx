@@ -2531,7 +2531,7 @@ function SettingsScreen() {
             <Card id={TRANSCRIPTION_MODEL_SETTINGS_SECTION_ID} className="overflow-visible">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2.5">
-                  <CardTitle>Transcription model</CardTitle>
+                  <CardTitle>Transcription</CardTitle>
                   <SettingsStatusDot active={modelStatusActive} label={modelStatusLabel} />
                 </div>
               </CardHeader>
@@ -2560,7 +2560,6 @@ function SettingsScreen() {
                 ) : null}
 
                 <div className="grid gap-3">
-                  <p className="text-sm font-semibold text-zinc-950">Model</p>
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
                       <SettingsSelect
@@ -2593,9 +2592,8 @@ function SettingsScreen() {
                 </div>
               </CardHeader>
             <CardPanel className="grid gap-6 pt-0">
-                <div className="grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(15rem,0.85fr)] md:items-start">
-                  <Field className="gap-3">
-                    <FieldLabel>Provider</FieldLabel>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1.35fr)_minmax(15rem,0.85fr)] md:items-start">
+                  <div className="min-w-0">
                     <SettingsSelect
                       ariaLabel="Summary provider"
                       value={snapshot.summaryDraft.provider}
@@ -2604,10 +2602,9 @@ function SettingsScreen() {
                       placeholder="Select provider"
                       disabled={snapshot.summaryBusy}
                     />
-                  </Field>
+                  </div>
 
-                  <Field className="gap-3">
-                    <FieldLabel>Model</FieldLabel>
+                  <div className="min-w-0">
                     {!snapshot.summaryDraft.provider ? (
                       <Input value="" placeholder="Select provider first" disabled />
                     ) : summaryModelPresets.length > 0 ? (
@@ -2644,7 +2641,7 @@ function SettingsScreen() {
                         disabled={snapshot.summaryBusy}
                       />
                     )}
-                  </Field>
+                  </div>
                 </div>
 
                 {selectedSummaryProvider ? (
