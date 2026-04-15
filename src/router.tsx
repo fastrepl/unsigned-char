@@ -572,8 +572,8 @@ function MainWindowCharBanner() {
               });
             }}
           >
-            <img src={charLogo} alt="" aria-hidden="true" className="h-3.5 w-auto shrink-0" />
             Start using
+            <img src={charLogo} alt="" aria-hidden="true" className="h-3.5 w-auto shrink-0" />
           </button>
           <Button
             type="button"
