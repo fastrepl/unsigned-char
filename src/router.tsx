@@ -8,7 +8,7 @@ import {
   useNavigate,
   useParams,
 } from "@tanstack/react-router";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ChevronDown,
@@ -29,6 +29,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import anthropicLogo from "./assets/provider-icons/anthropic.png";
@@ -87,13 +88,18 @@ import {
   formatDateTime,
   getMeetingTranscriptEntries,
   getMeetingSpeakerLabel,
+  getMeetingSpeakerSuggestion,
   getTimezoneOptions,
   isSettingsWindow,
+  meetingHasSpeakerOverride,
   requiresAppSetup,
   sortedMeetings,
   type AudioRetentionPolicy,
   type ManagedModelDownloadState,
   type Meeting,
+  type SpeakerProfile,
+  type SpeakerProfileSample,
+  type SpeakerSuggestion,
   type SpeechModelId,
   type TranscriptEntry,
   useAppState,
@@ -190,6 +196,95 @@ function scrollSettingsSectionIntoView(section: SettingsSection | null) {
   }
 
   document.getElementById(SETTINGS_SECTION_IDS[section])?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+let activeSpeakerSampleId: string | null = null;
+let activeSpeakerAudio: HTMLAudioElement | null = null;
+let activeSpeakerAudioTimer: number | null = null;
+const speakerSampleListeners = new Set<() => void>();
+
+function emitSpeakerSampleChange() {
+  speakerSampleListeners.forEach((listener) => listener());
+}
+
+function stopSpeakerSamplePreview() {
+  if (activeSpeakerAudioTimer !== null) {
+    window.clearTimeout(activeSpeakerAudioTimer);
+    activeSpeakerAudioTimer = null;
+  }
+
+  if (activeSpeakerAudio) {
+    activeSpeakerAudio.pause();
+    activeSpeakerAudio.currentTime = 0;
+    activeSpeakerAudio = null;
+  }
+
+  if (activeSpeakerSampleId !== null) {
+    activeSpeakerSampleId = null;
+    emitSpeakerSampleChange();
+  }
+}
+
+async function playSpeakerSamplePreview(sample: SpeakerProfileSample) {
+  stopSpeakerSamplePreview();
+
+  const audio = new Audio(convertFileSrc(sample.audioPath));
+  activeSpeakerAudio = audio;
+  activeSpeakerSampleId = sample.id;
+  emitSpeakerSampleChange();
+  audio.addEventListener(
+    "ended",
+    () => {
+      stopSpeakerSamplePreview();
+    },
+    { once: true },
+  );
+
+  await new Promise<void>((resolve, reject) => {
+    const handleLoaded = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = () => {
+      cleanup();
+      reject(new Error("Failed to load sample audio."));
+    };
+    const cleanup = () => {
+      audio.removeEventListener("loadedmetadata", handleLoaded);
+      audio.removeEventListener("error", handleError);
+    };
+
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      resolve();
+      return;
+    }
+
+    audio.addEventListener("loadedmetadata", handleLoaded, { once: true });
+    audio.addEventListener("error", handleError, { once: true });
+    audio.load();
+  });
+
+  audio.currentTime = Math.max(0, sample.startSeconds);
+
+  const durationMs = Math.max(300, (sample.endSeconds - sample.startSeconds) * 1000);
+  activeSpeakerAudioTimer = window.setTimeout(() => {
+    stopSpeakerSamplePreview();
+  }, durationMs + 150);
+
+  await audio.play();
+}
+
+function subscribeSpeakerSample(listener: () => void) {
+  speakerSampleListeners.add(listener);
+  return () => speakerSampleListeners.delete(listener);
+}
+
+function useActiveSpeakerSampleId() {
+  return useSyncExternalStore(
+    subscribeSpeakerSample,
+    () => activeSpeakerSampleId,
+    () => activeSpeakerSampleId,
+  );
 }
 
 function LiveIndicator({ className }: { className?: string }) {
@@ -1357,10 +1452,14 @@ function SpeakerLabelField({
   meetingId,
   speakerId,
   speakerLabel,
+  suggestion,
+  showSuggestion,
 }: {
   meetingId: string;
   speakerId: string;
   speakerLabel: string;
+  suggestion: SpeakerSuggestion | null;
+  showSuggestion: boolean;
 }) {
   const [draft, setDraft] = useState(speakerLabel);
   const [isEditing, setIsEditing] = useState(false);
@@ -1403,19 +1502,37 @@ function SpeakerLabelField({
   }
 
   return (
-    <button
-      type="button"
-      className="-ml-1.5 inline-flex h-7 min-w-0 items-center rounded-[var(--radius-control-sm)] bg-transparent px-1.5 py-1 text-left text-[11px] font-semibold text-zinc-700 normal-case tracking-[0.08em] transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
-      aria-label={`Rename speaker ${speakerLabel}`}
-      title="Rename this speaker across the transcript"
-      style={draftWidth}
-      onClick={() => {
-        setDraft(speakerLabel);
-        setIsEditing(true);
-      }}
-    >
-      {speakerLabel}
-    </button>
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <button
+        type="button"
+        className="-ml-1.5 inline-flex h-7 min-w-0 items-center rounded-[var(--radius-control-sm)] bg-transparent px-1.5 py-1 text-left text-[11px] font-semibold text-zinc-700 normal-case tracking-[0.08em] transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+        aria-label={`Rename speaker ${speakerLabel}`}
+        title="Rename this speaker across the transcript"
+        style={draftWidth}
+        onClick={() => {
+          setDraft(speakerLabel);
+          setIsEditing(true);
+        }}
+      >
+        {speakerLabel}
+      </button>
+      {showSuggestion && suggestion ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" size="sm">
+            Likely {suggestion.profileName}
+          </Badge>
+          <button
+            type="button"
+            className="text-[11px] font-semibold tracking-[0.08em] text-zinc-600 transition hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+            onClick={() => {
+              appStore.updateMeetingSpeakerLabel(meetingId, speakerId, suggestion.profileName);
+            }}
+          >
+            Use match
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1475,6 +1592,15 @@ function MeetingScreen() {
   }
 
   const transcriptEntries = getMeetingTranscriptEntries(meeting);
+  const firstSpeakerSegmentIndex = meeting.diarizationSegments.reduce<Record<string, number>>(
+    (indices, segment, index) => {
+      if (indices[segment.speaker] === undefined) {
+        indices[segment.speaker] = index;
+      }
+      return indices;
+    },
+    {},
+  );
   const deleteDisabled = isMeetingDeleteDisabled(
     meeting,
     snapshot.transcriptionBusy,
@@ -1782,6 +1908,11 @@ function MeetingScreen() {
                                 meetingId={meeting.id}
                                 speakerId={speakerId}
                                 speakerLabel={speakerLabel}
+                                suggestion={getMeetingSpeakerSuggestion(meeting, speakerId)}
+                                showSuggestion={
+                                  !meetingHasSpeakerOverride(meeting, speakerId) &&
+                                  firstSpeakerSegmentIndex[speakerId] === index
+                                }
                               />
                             ) : (
                               <span className="text-zinc-700 normal-case tracking-[0.08em]">
@@ -1826,6 +1957,117 @@ function MeetingScreen() {
   );
 }
 
+function SpeakerSampleButton({ sample }: { sample: SpeakerProfileSample }) {
+  const activeSampleId = useActiveSpeakerSampleId();
+  const isPlaying = activeSampleId === sample.id;
+  const durationLabel = `${Math.max(1, Math.round(sample.endSeconds - sample.startSeconds))}s`;
+
+  return (
+    <Button
+      variant={isPlaying ? "secondary" : "outline"}
+      size="sm"
+      onClick={() => {
+        if (isPlaying) {
+          stopSpeakerSamplePreview();
+          return;
+        }
+
+        void playSpeakerSamplePreview(sample).catch(() => {
+          stopSpeakerSamplePreview();
+        });
+      }}
+    >
+      {isPlaying ? `Stop ${durationLabel}` : `Play ${durationLabel}`}
+    </Button>
+  );
+}
+
+function SpeakerProfileCard({
+  profile,
+  busy,
+}: {
+  profile: SpeakerProfile;
+  busy: boolean;
+}) {
+  const [draftName, setDraftName] = useState(profile.name);
+
+  return (
+    <div className="rounded-[calc(var(--radius)-4px)] border border-[color:var(--border)] bg-white/70 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <Input
+              value={draftName}
+              onChange={(event) => {
+                setDraftName(event.target.value);
+              }}
+              disabled={busy}
+              className="max-w-[240px]"
+              aria-label={`Speaker name for ${profile.name}`}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy || draftName.trim() === profile.name}
+              onClick={() => {
+                appStore.updateSpeakerProfileName(profile.id, draftName);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+          <p className="mt-2 text-sm text-zinc-600">
+            {profile.samples.length} confirmed {profile.samples.length === 1 ? "sample" : "samples"}
+            {profile.updatedAt ? ` · Updated ${formatDateTime(profile.updatedAt)}` : ""}
+          </p>
+        </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            appStore.deleteSpeakerProfile(profile.id);
+          }}
+        >
+          Remove person
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        {profile.samples.map((sample) => (
+          <div
+            key={sample.id}
+            className="flex flex-col gap-3 rounded-[var(--radius-control-sm)] border border-zinc-200 bg-zinc-50/80 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-zinc-900">
+                {Math.round(sample.startSeconds)}s to {Math.round(sample.endSeconds)}s
+              </p>
+              <p className="text-xs text-zinc-500">
+                {sample.addedAt ? formatDateTime(sample.addedAt) : "Saved locally"}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <SpeakerSampleButton sample={sample} />
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  appStore.deleteSpeakerProfileSample(profile.id, sample.id);
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SettingsScreen() {
   const snapshot = useAppState();
   const settingsReady = Boolean(snapshot.generalSettings && snapshot.summarySettings && snapshot.modelSettings);
@@ -1834,7 +2076,7 @@ function SettingsScreen() {
   );
   const [settingsScrollTop, setSettingsScrollTop] = useState(0);
   const settingsLoadNote =
-    snapshot.permissionNote || snapshot.generalNote || snapshot.summaryNote;
+    snapshot.permissionNote || snapshot.generalNote || snapshot.summaryNote || snapshot.speakerProfilesNote;
   const settingsContentWidthClass = isSettingsWindow ? "max-w-[640px]" : "max-w-[760px]";
   const settingsShellHeightClass = isSettingsWindow ? "h-screen" : windowShellHeightClass;
   const settingsContentInsetClass = isSettingsWindow ? "px-4 pt-12 pb-6" : "px-5 pt-5 pb-6";
@@ -2102,6 +2344,41 @@ function SettingsScreen() {
                     </FieldDescription>
                   ) : null}
                 </Field>
+              </CardPanel>
+            </Card>
+
+            <Card className="overflow-visible">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2.5">
+                  <CardTitle>People</CardTitle>
+                  <SettingsStatusDot
+                    active={snapshot.speakerProfiles.length > 0}
+                    label={snapshot.speakerProfiles.length > 0 ? "ready" : "empty"}
+                  />
+                </div>
+                <CardDescription>
+                  Confirmed speakers are learned from transcript labels and kept locally with a few short reference snippets for later matching.
+                </CardDescription>
+              </CardHeader>
+              <CardPanel className="grid gap-4 pt-0">
+                {snapshot.speakerProfiles.length === 0 ? (
+                  <div className="rounded-[calc(var(--radius)-4px)] border border-dashed border-zinc-300 bg-zinc-50/70 px-4 py-4 text-sm text-zinc-600">
+                    Rename a diarized speaker in any meeting to start building the speaker library.
+                  </div>
+                ) : (
+                  snapshot.speakerProfiles.map((profile) => (
+                    <SpeakerProfileCard
+                      key={`${profile.id}-${profile.updatedAt}`}
+                      profile={profile}
+                      busy={snapshot.speakerProfilesBusy}
+                    />
+                  ))
+                )}
+                {snapshot.speakerProfilesNote ? (
+                  <FieldDescription className="text-sm text-rose-700">
+                    {snapshot.speakerProfilesNote}
+                  </FieldDescription>
+                ) : null}
               </CardPanel>
             </Card>
 

@@ -44,6 +44,7 @@ export type Meeting = {
   requestedSpeakerCount: number | null;
   diarizationSegments: DiarizationSegment[];
   speakerLabels: Record<string, string>;
+  speakerSuggestions: Record<string, SpeakerSuggestion>;
   diarizationSpeakerCount: number;
   diarizationPipelineSource: string | null;
   diarizationRanAt: string | null;
@@ -167,11 +168,62 @@ export type DiarizationSegment = {
   endSeconds: number;
 };
 
+export type SpeakerProfileSample = {
+  id: string;
+  audioPath: string;
+  startSeconds: number;
+  endSeconds: number;
+  addedAt: string;
+  meetingId: string | null;
+  sourceSpeaker: string | null;
+  embedding: number[];
+};
+
+export type SpeakerProfile = {
+  id: string;
+  name: string;
+  updatedAt: string;
+  centroidEmbedding: number[];
+  samples: SpeakerProfileSample[];
+};
+
+export type SpeakerSuggestion = {
+  profileId: string;
+  profileName: string;
+  confidence: number;
+  alternateConfidence: number;
+};
+
 type LocalDiarizationResult = {
   audioPath: string;
   pipelineSource: string;
   speakerCount: number;
   segments: DiarizationSegment[];
+};
+
+type SpeakerEmbeddingAnalysisInput = {
+  audioPath: string;
+  speakers: {
+    speaker: string;
+    segments: DiarizationSegment[];
+  }[];
+};
+
+type SpeakerEmbeddingAnalysisSample = {
+  startSeconds: number;
+  endSeconds: number;
+  durationSeconds: number;
+  embedding: number[];
+};
+
+type SpeakerEmbeddingAnalysis = {
+  speaker: string;
+  embedding: number[];
+  samples: SpeakerEmbeddingAnalysisSample[];
+};
+
+type SpeakerEmbeddingAnalysisResult = {
+  speakers: SpeakerEmbeddingAnalysis[];
 };
 
 type MarkdownExport = {
@@ -219,14 +271,17 @@ type AppState = {
   generalDraft: GeneralDraft;
   summarySettings: SummarySettings | null;
   summaryDraft: SummaryDraft;
+  speakerProfiles: SpeakerProfile[];
   meetings: Meeting[];
   permissionNote: string;
   generalNote: string;
   summaryNote: string;
+  speakerProfilesNote: string;
   modelBusy: boolean;
   generalBusy: boolean;
   audioDeviceRefreshBusy: boolean;
   summaryBusy: boolean;
+  speakerProfilesBusy: boolean;
   startMeetingBusy: boolean;
   transcriptionBusy: boolean;
   transcriptionStopping: boolean;
@@ -359,14 +414,17 @@ let state: AppState = {
   generalDraft: emptyGeneralDraft(),
   summarySettings: null,
   summaryDraft: emptySummaryDraft(),
+  speakerProfiles: [],
   meetings: loadMeetings(),
   permissionNote: "",
   generalNote: "",
   summaryNote: "",
+  speakerProfilesNote: "",
   modelBusy: false,
   generalBusy: false,
   audioDeviceRefreshBusy: false,
   summaryBusy: false,
+  speakerProfilesBusy: false,
   startMeetingBusy: false,
   transcriptionBusy: false,
   transcriptionStopping: false,
@@ -594,6 +652,7 @@ function normalizeMeeting(value: unknown): Meeting | null {
     requestedSpeakerCount: normalizeRequestedSpeakerCount(candidate.requestedSpeakerCount),
     diarizationSegments,
     speakerLabels: normalizeSpeakerLabels(candidate.speakerLabels),
+    speakerSuggestions: normalizeSpeakerSuggestions(candidate.speakerSuggestions),
     diarizationSpeakerCount:
       typeof candidate.diarizationSpeakerCount === "number" &&
       Number.isFinite(candidate.diarizationSpeakerCount)
@@ -1192,6 +1251,198 @@ function normalizeSpeakerLabels(value: unknown) {
   );
 }
 
+function normalizeEmbedding(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) =>
+    typeof entry === "number" && Number.isFinite(entry) ? [entry] : [],
+  );
+}
+
+function normalizeSpeakerSuggestions(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, SpeakerSuggestion>>(
+    (speakerSuggestions, [speaker, suggestion]) => {
+      if (!suggestion || typeof suggestion !== "object") {
+        return speakerSuggestions;
+      }
+
+      const candidate = suggestion as Record<string, unknown>;
+      if (
+        typeof candidate.profileId !== "string" ||
+        typeof candidate.profileName !== "string" ||
+        typeof candidate.confidence !== "number" ||
+        typeof candidate.alternateConfidence !== "number" ||
+        !Number.isFinite(candidate.confidence) ||
+        !Number.isFinite(candidate.alternateConfidence)
+      ) {
+        return speakerSuggestions;
+      }
+
+      const normalizedSpeaker = normalizeSpeakerId(speaker);
+      if (!normalizedSpeaker) {
+        return speakerSuggestions;
+      }
+
+      speakerSuggestions[normalizedSpeaker] = {
+        profileId: candidate.profileId,
+        profileName: normalizeSpeakerLabel(candidate.profileName),
+        confidence: candidate.confidence,
+        alternateConfidence: candidate.alternateConfidence,
+      };
+      return speakerSuggestions;
+    },
+    {},
+  );
+}
+
+function normalizeSpeakerProfileSample(value: unknown): SpeakerProfileSample | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.id !== "string" ||
+    typeof candidate.audioPath !== "string" ||
+    typeof candidate.startSeconds !== "number" ||
+    typeof candidate.endSeconds !== "number" ||
+    !Number.isFinite(candidate.startSeconds) ||
+    !Number.isFinite(candidate.endSeconds) ||
+    candidate.endSeconds <= candidate.startSeconds
+  ) {
+    return null;
+  }
+
+  const embedding = normalizeEmbedding(candidate.embedding);
+  if (embedding.length === 0) {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    audioPath: candidate.audioPath,
+    startSeconds: candidate.startSeconds,
+    endSeconds: candidate.endSeconds,
+    addedAt: typeof candidate.addedAt === "string" ? candidate.addedAt : "",
+    meetingId: typeof candidate.meetingId === "string" && candidate.meetingId.trim() ? candidate.meetingId : null,
+    sourceSpeaker:
+      typeof candidate.sourceSpeaker === "string" && candidate.sourceSpeaker.trim()
+        ? normalizeSpeakerId(candidate.sourceSpeaker)
+        : null,
+    embedding,
+  };
+}
+
+function normalizeSpeakerProfile(value: unknown): SpeakerProfile | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== "string" || typeof candidate.name !== "string") {
+    return null;
+  }
+
+  const name = normalizeSpeakerLabel(candidate.name);
+  if (!name) {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    name,
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+    centroidEmbedding: normalizeEmbedding(candidate.centroidEmbedding),
+    samples: Array.isArray(candidate.samples)
+      ? candidate.samples
+          .map(normalizeSpeakerProfileSample)
+          .filter((sample): sample is SpeakerProfileSample => sample !== null)
+      : [],
+  };
+}
+
+function normalizeSpeakerProfiles(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(normalizeSpeakerProfile)
+    .filter((profile): profile is SpeakerProfile => profile !== null);
+}
+
+function normalizeSpeakerEmbeddingAnalysisSample(value: unknown): SpeakerEmbeddingAnalysisSample | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.startSeconds !== "number" ||
+    typeof candidate.endSeconds !== "number" ||
+    typeof candidate.durationSeconds !== "number" ||
+    !Number.isFinite(candidate.startSeconds) ||
+    !Number.isFinite(candidate.endSeconds) ||
+    !Number.isFinite(candidate.durationSeconds)
+  ) {
+    return null;
+  }
+
+  const embedding = normalizeEmbedding(candidate.embedding);
+  if (embedding.length === 0) {
+    return null;
+  }
+
+  return {
+    startSeconds: candidate.startSeconds,
+    endSeconds: candidate.endSeconds,
+    durationSeconds: candidate.durationSeconds,
+    embedding,
+  };
+}
+
+function normalizeSpeakerEmbeddingAnalysis(value: unknown): SpeakerEmbeddingAnalysis | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.speaker !== "string") {
+    return null;
+  }
+
+  return {
+    speaker: normalizeSpeakerId(candidate.speaker),
+    embedding: normalizeEmbedding(candidate.embedding),
+    samples: Array.isArray(candidate.samples)
+      ? candidate.samples
+          .map(normalizeSpeakerEmbeddingAnalysisSample)
+          .filter((sample): sample is SpeakerEmbeddingAnalysisSample => sample !== null)
+      : [],
+  };
+}
+
+function normalizeSpeakerEmbeddingAnalysisResult(value: unknown): SpeakerEmbeddingAnalysisResult {
+  if (!value || typeof value !== "object") {
+    return { speakers: [] };
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return {
+    speakers: Array.isArray(candidate.speakers)
+      ? candidate.speakers
+          .map(normalizeSpeakerEmbeddingAnalysis)
+          .filter((speaker): speaker is SpeakerEmbeddingAnalysis => speaker !== null)
+      : [],
+  };
+}
+
 function normalizeRequestedSpeakerCount(value: unknown) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return null;
@@ -1203,6 +1454,203 @@ function normalizeRequestedSpeakerCount(value: unknown) {
 
 function distinctSpeakerCount(segments: DiarizationSegment[]) {
   return new Set(segments.map((segment) => segment.speaker)).size;
+}
+
+function speakerProfileNameKey(name: string) {
+  return normalizeSpeakerLabel(name).toLocaleLowerCase();
+}
+
+function cosineSimilarity(left: number[], right: number[]) {
+  if (left.length === 0 || left.length !== right.length) {
+    return 0;
+  }
+
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    dot += left[index] * right[index];
+    leftNorm += left[index] * left[index];
+    rightNorm += right[index] * right[index];
+  }
+
+  const denominator = Math.sqrt(leftNorm) * Math.sqrt(rightNorm);
+  return denominator > 0 ? dot / denominator : 0;
+}
+
+function normalizedEmbeddingCentroid(embeddings: number[][]) {
+  const [first] = embeddings;
+  if (!first || first.length === 0) {
+    return [];
+  }
+
+  const centroid = new Array(first.length).fill(0);
+  for (const embedding of embeddings) {
+    if (embedding.length !== centroid.length) {
+      continue;
+    }
+
+    for (let index = 0; index < centroid.length; index += 1) {
+      centroid[index] += embedding[index];
+    }
+  }
+
+  const norm = Math.sqrt(centroid.reduce((sum, value) => sum + value * value, 0));
+  if (norm === 0) {
+    return centroid;
+  }
+
+  return centroid.map((value) => value / norm);
+}
+
+function speakerSampleSignature(sample: Pick<SpeakerProfileSample, "audioPath" | "startSeconds" | "endSeconds">) {
+  return `${sample.audioPath}::${sample.startSeconds.toFixed(3)}::${sample.endSeconds.toFixed(3)}`;
+}
+
+function prepareSpeakerProfilesForSave(profiles: SpeakerProfile[]) {
+  return profiles.flatMap((profile) => {
+    const name = normalizeSpeakerLabel(profile.name);
+    if (!name) {
+      return [];
+    }
+
+    const seenSamples = new Set<string>();
+    const samples = profile.samples.flatMap((sample) => {
+      if (!sample.audioPath.trim() || sample.endSeconds <= sample.startSeconds) {
+        return [];
+      }
+
+      const embedding = normalizeEmbedding(sample.embedding);
+      if (embedding.length === 0) {
+        return [];
+      }
+
+      const normalizedSample: SpeakerProfileSample = {
+        id: sample.id || crypto.randomUUID(),
+        audioPath: sample.audioPath.trim(),
+        startSeconds: sample.startSeconds,
+        endSeconds: sample.endSeconds,
+        addedAt: sample.addedAt || new Date().toISOString(),
+        meetingId: sample.meetingId?.trim() || null,
+        sourceSpeaker: sample.sourceSpeaker?.trim() || null,
+        embedding,
+      };
+      const signature = speakerSampleSignature(normalizedSample);
+      if (seenSamples.has(signature)) {
+        return [];
+      }
+
+      seenSamples.add(signature);
+      return [normalizedSample];
+    });
+
+    return [
+      {
+        id: profile.id || crypto.randomUUID(),
+        name,
+        updatedAt: profile.updatedAt || new Date().toISOString(),
+        centroidEmbedding: normalizedEmbeddingCentroid(samples.map((sample) => sample.embedding)),
+        samples,
+      },
+    ];
+  });
+}
+
+function scoreSpeakerProfile(embedding: number[], profile: SpeakerProfile) {
+  const centroidScore = cosineSimilarity(embedding, profile.centroidEmbedding);
+  const sampleScores = profile.samples
+    .map((sample) => cosineSimilarity(embedding, sample.embedding))
+    .filter((score) => Number.isFinite(score))
+    .sort((left, right) => right - left);
+  const bestSampleScore = sampleScores[0] ?? 0;
+
+  return {
+    profile,
+    score: Math.max(bestSampleScore, centroidScore),
+    centroidScore,
+    bestSampleScore,
+  };
+}
+
+function recommendSpeakerProfile(embedding: number[], profiles: SpeakerProfile[]) {
+  const ranked = profiles
+    .map((profile) => scoreSpeakerProfile(embedding, profile))
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => right.score - left.score);
+  const [best, alternate] = ranked;
+  if (!best) {
+    return null;
+  }
+
+  const threshold = best.profile.samples.length >= 3 ? 0.7 : 0.74;
+  if (best.score < threshold) {
+    return null;
+  }
+
+  const alternateScore = alternate?.score ?? 0;
+  if (best.score < 0.82 && best.score - alternateScore < 0.04) {
+    return null;
+  }
+
+  return {
+    profileId: best.profile.id,
+    profileName: best.profile.name,
+    confidence: best.score,
+    alternateConfidence: alternateScore,
+  } satisfies SpeakerSuggestion;
+}
+
+function syncMeetingSuggestionNames(meetings: Meeting[], profiles: SpeakerProfile[]) {
+  const profileNames = new Map(profiles.map((profile) => [profile.id, profile.name]));
+  return meetings.map((meeting) => {
+    const speakerSuggestions = Object.entries(meeting.speakerSuggestions).reduce<
+      Record<string, SpeakerSuggestion>
+    >((nextSuggestions, [speaker, suggestion]) => {
+      const profileName = profileNames.get(suggestion.profileId);
+      if (!profileName) {
+        return nextSuggestions;
+      }
+
+      nextSuggestions[speaker] = {
+        ...suggestion,
+        profileName,
+      };
+      return nextSuggestions;
+    }, {});
+
+    return speakerSuggestions === meeting.speakerSuggestions
+      ? meeting
+      : {
+          ...meeting,
+          speakerSuggestions,
+        };
+  });
+}
+
+function speakerEmbeddingRequestsForMeeting(meeting: Meeting, speakerIds?: string[]) {
+  const allowedSpeakers = speakerIds?.length
+    ? new Set(speakerIds.map((speaker) => normalizeSpeakerId(speaker)).filter(Boolean))
+    : null;
+  const groupedSegments = new Map<string, DiarizationSegment[]>();
+
+  for (const segment of meeting.diarizationSegments) {
+    const speaker = normalizeSpeakerId(segment.speaker);
+    if (!speaker || (allowedSpeakers && !allowedSpeakers.has(speaker))) {
+      continue;
+    }
+
+    const existing = groupedSegments.get(speaker);
+    if (existing) {
+      existing.push(segment);
+    } else {
+      groupedSegments.set(speaker, [segment]);
+    }
+  }
+
+  return Array.from(groupedSegments.entries()).map(([speaker, segments]) => ({
+    speaker,
+    segments,
+  }));
 }
 
 function activeTimezone() {
@@ -1311,6 +1759,7 @@ function withoutRetainedMeetingAudio(
       audioSavedAt: null,
       diarizationSegments: clearDiarization ? [] : meeting.diarizationSegments,
       speakerLabels: clearDiarization ? {} : meeting.speakerLabels,
+      speakerSuggestions: clearDiarization ? {} : meeting.speakerSuggestions,
       diarizationSpeakerCount: clearDiarization ? 0 : meeting.diarizationSpeakerCount,
       diarizationPipelineSource: clearDiarization ? null : meeting.diarizationPipelineSource,
       diarizationRanAt: clearDiarization ? null : meeting.diarizationRanAt,
@@ -1381,6 +1830,24 @@ export function getMeetingSpeakerLabel(meeting: Meeting, speaker: string) {
   }
 
   return meeting.speakerLabels[normalizedSpeaker] ?? defaultSpeakerLabelForId(normalizedSpeaker);
+}
+
+export function getMeetingSpeakerSuggestion(meeting: Meeting, speaker: string) {
+  const normalizedSpeaker = normalizeSpeakerId(speaker);
+  if (!normalizedSpeaker) {
+    return null;
+  }
+
+  return meeting.speakerSuggestions[normalizedSpeaker] ?? null;
+}
+
+export function meetingHasSpeakerOverride(meeting: Meeting, speaker: string) {
+  const normalizedSpeaker = normalizeSpeakerId(speaker);
+  if (!normalizedSpeaker) {
+    return false;
+  }
+
+  return typeof meeting.speakerLabels[normalizedSpeaker] === "string";
 }
 
 function formatSpeakerTurnsMarkdown(meeting: Meeting) {
@@ -1604,6 +2071,7 @@ function createMeeting(meetingId = crypto.randomUUID(), audioPath = "") {
     requestedSpeakerCount: null,
     diarizationSegments: [],
     speakerLabels: {},
+    speakerSuggestions: {},
     diarizationSpeakerCount: 0,
     diarizationPipelineSource: null,
     diarizationRanAt: null,
@@ -1975,14 +2443,263 @@ async function refreshSummarySettings(silent = false) {
   }
 }
 
+async function refreshSpeakerProfiles(silent = false) {
+  try {
+    const speakerProfiles = normalizeSpeakerProfiles(
+      await invoke<SpeakerProfile[]>("speaker_profiles_state"),
+    );
+    patch({
+      speakerProfiles,
+      speakerProfilesNote: "",
+      meetings: syncMeetingSuggestionNames(state.meetings, speakerProfiles),
+    });
+  } catch (error) {
+    if (!silent) {
+      patch({ speakerProfilesNote: `Failed to load speaker library: ${String(error)}` });
+    }
+  }
+}
+
 async function refreshSettingsWindowData(silent = false) {
   await Promise.all([
     refreshGeneralSettings(silent),
     refreshAudioDeviceSettings(silent),
     refreshSummarySettings(silent),
+    refreshSpeakerProfiles(silent),
     refreshManagedModelDownloadState(silent),
     refreshModelSettings(silent),
   ]);
+}
+
+async function saveSpeakerProfiles(profiles: SpeakerProfile[], silent = false) {
+  patch({ speakerProfilesBusy: true });
+
+  try {
+    const preparedProfiles = prepareSpeakerProfilesForSave(profiles);
+    const speakerProfiles = normalizeSpeakerProfiles(
+      await invoke<SpeakerProfile[]>("save_speaker_profiles", { profiles: preparedProfiles }),
+    );
+    patch({
+      speakerProfiles,
+      speakerProfilesBusy: false,
+      speakerProfilesNote: "",
+      meetings: syncMeetingSuggestionNames(state.meetings, speakerProfiles),
+    });
+    return speakerProfiles;
+  } catch (error) {
+    patch({
+      speakerProfilesBusy: false,
+      ...(silent
+        ? {}
+        : { speakerProfilesNote: `Speaker library save failed: ${String(error)}` }),
+    });
+    return null;
+  }
+}
+
+async function analyzeMeetingSpeakerEmbeddings(meeting: Meeting, speakerIds?: string[]) {
+  const speakers = speakerEmbeddingRequestsForMeeting(meeting, speakerIds);
+  if (!meeting.audioPath.trim() || speakers.length === 0) {
+    return { speakers: [] } satisfies SpeakerEmbeddingAnalysisResult;
+  }
+
+  return normalizeSpeakerEmbeddingAnalysisResult(
+    await invoke<SpeakerEmbeddingAnalysisResult>("analyze_speaker_embeddings", {
+      input: {
+        audioPath: meeting.audioPath.trim(),
+        speakers,
+      } satisfies SpeakerEmbeddingAnalysisInput,
+    }),
+  );
+}
+
+async function refreshMeetingSpeakerSuggestions(meetingId: string, speakerIds?: string[]) {
+  const meeting = getMeeting(meetingId);
+  if (!meeting) {
+    return;
+  }
+
+  const requestedSpeakers = speakerIds?.map((speaker) => normalizeSpeakerId(speaker)).filter(Boolean);
+  if (state.speakerProfiles.length === 0 || !meeting.audioPath.trim() || meeting.diarizationSegments.length === 0) {
+    updateMeeting(meetingId, (current) => {
+      const speakerSuggestions = { ...current.speakerSuggestions };
+      for (const speaker of requestedSpeakers ?? Object.keys(speakerSuggestions)) {
+        delete speakerSuggestions[speaker];
+      }
+
+      return {
+        ...current,
+        speakerSuggestions,
+      };
+    });
+    return;
+  }
+
+  try {
+    const analysis = await analyzeMeetingSpeakerEmbeddings(meeting, requestedSpeakers);
+    const nextSuggestions = { ...meeting.speakerSuggestions };
+    for (const speaker of requestedSpeakers ?? Object.keys(nextSuggestions)) {
+      delete nextSuggestions[speaker];
+    }
+
+    for (const speaker of analysis.speakers) {
+      const suggestion = recommendSpeakerProfile(speaker.embedding, state.speakerProfiles);
+      if (suggestion) {
+        nextSuggestions[speaker.speaker] = suggestion;
+      }
+    }
+
+    updateMeeting(meetingId, (current) => ({
+      ...current,
+      speakerSuggestions: nextSuggestions,
+      updatedAt: current.updatedAt,
+    }));
+  } catch (error) {
+    patch({
+      meetingNote: `Speaker matching failed: ${String(error)}`,
+    });
+  }
+}
+
+function removeMeetingSpeakerSamplesFromProfiles(
+  profiles: SpeakerProfile[],
+  meetingId: string,
+  speakerId: string,
+) {
+  const normalizedSpeaker = normalizeSpeakerId(speakerId);
+  let changed = false;
+
+  const nextProfiles = profiles.flatMap((profile) => {
+    const samples = profile.samples.filter((sample) => {
+      const matchesSource =
+        sample.meetingId === meetingId && normalizeSpeakerId(sample.sourceSpeaker ?? "") === normalizedSpeaker;
+      if (matchesSource) {
+        changed = true;
+      }
+      return !matchesSource;
+    });
+
+    if (samples.length === 0 && profile.samples.length > 0) {
+      return [];
+    }
+
+    if (samples.length === profile.samples.length) {
+      return [profile];
+    }
+
+    return [
+      {
+        ...profile,
+        updatedAt: new Date().toISOString(),
+        centroidEmbedding: normalizedEmbeddingCentroid(samples.map((sample) => sample.embedding)),
+        samples,
+      },
+    ];
+  });
+
+  return changed ? nextProfiles : profiles;
+}
+
+function mergeSpeakerProfileSamples(
+  existingSamples: SpeakerProfileSample[],
+  incomingSamples: SpeakerProfileSample[],
+) {
+  const seenSignatures = new Set<string>();
+  const merged: SpeakerProfileSample[] = [];
+
+  for (const sample of [...incomingSamples, ...existingSamples]) {
+    const signature = speakerSampleSignature(sample);
+    if (seenSignatures.has(signature)) {
+      continue;
+    }
+
+    seenSignatures.add(signature);
+    merged.push(sample);
+  }
+
+  return merged.slice(0, 12);
+}
+
+async function syncSpeakerProfileForMeetingSpeaker(
+  meetingId: string,
+  speakerId: string,
+  label: string | null,
+) {
+  const normalizedSpeaker = normalizeSpeakerId(speakerId);
+  const nextLabel = label ? normalizeSpeakerLabel(label) : null;
+  const strippedProfiles = removeMeetingSpeakerSamplesFromProfiles(
+    state.speakerProfiles,
+    meetingId,
+    normalizedSpeaker,
+  );
+
+  if (!nextLabel) {
+    if (strippedProfiles !== state.speakerProfiles) {
+      await saveSpeakerProfiles(strippedProfiles, true);
+    }
+    await refreshMeetingSpeakerSuggestions(meetingId, [normalizedSpeaker]);
+    return;
+  }
+
+  const meeting = getMeeting(meetingId);
+  if (!meeting || !meeting.audioPath.trim()) {
+    if (strippedProfiles !== state.speakerProfiles) {
+      await saveSpeakerProfiles(strippedProfiles, true);
+    }
+    return;
+  }
+
+  try {
+    const analysis = await analyzeMeetingSpeakerEmbeddings(meeting, [normalizedSpeaker]);
+    const speakerAnalysis = analysis.speakers.find((speaker) => speaker.speaker === normalizedSpeaker);
+    if (!speakerAnalysis || speakerAnalysis.samples.length === 0) {
+      if (strippedProfiles !== state.speakerProfiles) {
+        await saveSpeakerProfiles(strippedProfiles, true);
+      }
+      return;
+    }
+
+    const profileKey = speakerProfileNameKey(nextLabel);
+    const nextSamples = speakerAnalysis.samples.map((sample) => ({
+      id: crypto.randomUUID(),
+      audioPath: meeting.audioPath.trim(),
+      startSeconds: sample.startSeconds,
+      endSeconds: sample.endSeconds,
+      addedAt: new Date().toISOString(),
+      meetingId,
+      sourceSpeaker: normalizedSpeaker,
+      embedding: sample.embedding,
+    })) satisfies SpeakerProfileSample[];
+    const existingIndex = strippedProfiles.findIndex(
+      (profile) => speakerProfileNameKey(profile.name) === profileKey,
+    );
+
+    const nextProfiles = [...strippedProfiles];
+    if (existingIndex >= 0) {
+      const profile = nextProfiles[existingIndex];
+      const samples = mergeSpeakerProfileSamples(profile.samples, nextSamples);
+      nextProfiles[existingIndex] = {
+        ...profile,
+        name: nextLabel,
+        updatedAt: new Date().toISOString(),
+        centroidEmbedding: normalizedEmbeddingCentroid(samples.map((sample) => sample.embedding)),
+        samples,
+      };
+    } else {
+      nextProfiles.unshift({
+        id: crypto.randomUUID(),
+        name: nextLabel,
+        updatedAt: new Date().toISOString(),
+        centroidEmbedding: normalizedEmbeddingCentroid(nextSamples.map((sample) => sample.embedding)),
+        samples: nextSamples,
+      });
+    }
+
+    await saveSpeakerProfiles(nextProfiles, true);
+    await refreshMeetingSpeakerSuggestions(meetingId);
+  } catch (error) {
+    patch({ speakerProfilesNote: `Failed to learn speaker voice: ${String(error)}` });
+  }
 }
 
 async function ensureModelReady() {
@@ -2609,6 +3326,7 @@ async function runMeetingDiarization(
       ...current,
       audioPath: result.audioPath,
       diarizationSegments: result.segments,
+      speakerSuggestions: {},
       diarizationSpeakerCount: result.speakerCount,
       diarizationPipelineSource: result.pipelineSource,
       diarizationRanAt: new Date().toISOString(),
@@ -2630,6 +3348,7 @@ async function runMeetingDiarization(
       diarizationBannerMessage: completionMessage,
       meetingNote: "",
     });
+    void refreshMeetingSpeakerSuggestions(meetingId);
   } catch (error) {
     patch({
       diarizationMeetingId: null,
@@ -2915,6 +3634,7 @@ function handleAppFocus() {
     refreshAudioDeviceSettings(true),
     refreshGeneralSettings(true),
     refreshSummarySettings(true),
+    refreshSpeakerProfiles(true),
     refreshPermissions(true),
     refreshManagedModelDownloadState(true),
     refreshModelSettings(true),
@@ -3030,19 +3750,96 @@ function updateMeetingSpeakerLabel(meetingId: string, speaker: string, nextLabel
 
   updateMeeting(meetingId, (meeting) => {
     const speakerLabels = { ...meeting.speakerLabels };
+    const speakerSuggestions = { ...meeting.speakerSuggestions };
 
     if (nextOverride) {
       speakerLabels[normalizedSpeaker] = nextOverride;
     } else {
       delete speakerLabels[normalizedSpeaker];
     }
+    delete speakerSuggestions[normalizedSpeaker];
 
     return {
       ...meeting,
       speakerLabels,
+      speakerSuggestions,
       updatedAt: new Date().toISOString(),
     };
   });
+  void syncSpeakerProfileForMeetingSpeaker(meetingId, normalizedSpeaker, nextOverride);
+}
+
+function updateSpeakerProfileName(profileId: string, nextName: string) {
+  const normalizedName = normalizeSpeakerLabel(nextName);
+  if (!normalizedName) {
+    return;
+  }
+
+  const sourceProfile = state.speakerProfiles.find((profile) => profile.id === profileId);
+  if (!sourceProfile) {
+    return;
+  }
+
+  const targetProfile = state.speakerProfiles.find(
+    (profile) =>
+      profile.id !== profileId && speakerProfileNameKey(profile.name) === speakerProfileNameKey(normalizedName),
+  );
+  if (targetProfile) {
+    const mergedProfiles = state.speakerProfiles
+      .filter((profile) => profile.id !== profileId && profile.id !== targetProfile.id)
+      .concat({
+        ...targetProfile,
+        name: normalizedName,
+        updatedAt: new Date().toISOString(),
+        samples: mergeSpeakerProfileSamples(targetProfile.samples, sourceProfile.samples),
+        centroidEmbedding: normalizedEmbeddingCentroid(
+          mergeSpeakerProfileSamples(targetProfile.samples, sourceProfile.samples).map(
+            (sample) => sample.embedding,
+          ),
+        ),
+      });
+    void saveSpeakerProfiles(mergedProfiles);
+    return;
+  }
+
+  void saveSpeakerProfiles(
+    state.speakerProfiles.map((profile) =>
+      profile.id === profileId
+        ? {
+            ...profile,
+            name: normalizedName,
+            updatedAt: new Date().toISOString(),
+          }
+        : profile,
+    ),
+  );
+}
+
+function deleteSpeakerProfile(profileId: string) {
+  void saveSpeakerProfiles(state.speakerProfiles.filter((profile) => profile.id !== profileId));
+}
+
+function deleteSpeakerProfileSample(profileId: string, sampleId: string) {
+  const nextProfiles = state.speakerProfiles.flatMap((profile) => {
+    if (profile.id !== profileId) {
+      return [profile];
+    }
+
+    const samples = profile.samples.filter((sample) => sample.id !== sampleId);
+    if (samples.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        ...profile,
+        updatedAt: new Date().toISOString(),
+        centroidEmbedding: normalizedEmbeddingCentroid(samples.map((sample) => sample.embedding)),
+        samples,
+      },
+    ];
+  });
+  void saveSpeakerProfiles(nextProfiles);
 }
 
 function setHomeScrollTop(homeScrollTop: number) {
@@ -3331,6 +4128,7 @@ async function start() {
     refreshAudioDeviceSettings(true),
     refreshGeneralSettings(true),
     refreshSummarySettings(true),
+    refreshSpeakerProfiles(true),
     refreshPermissions(true),
     refreshManagedModelDownloadState(true),
     refreshModelSettings(true),
@@ -3356,6 +4154,9 @@ export const appStore = {
   updateMeetingAudioPath,
   updateMeetingRequestedSpeakerCount,
   updateMeetingSpeakerLabel,
+  updateSpeakerProfileName,
+  deleteSpeakerProfile,
+  deleteSpeakerProfileSample,
   setHomeScrollTop,
   setSelectedModel,
   setMainLanguage,
