@@ -2521,9 +2521,7 @@ function SettingsScreen() {
                   ))
                 )}
                 {snapshot.speakerProfilesNote ? (
-                  <FieldDescription className="text-sm text-rose-700">
-                    {snapshot.speakerProfilesNote}
-                  </FieldDescription>
+                  <p className="text-sm text-rose-700">{snapshot.speakerProfilesNote}</p>
                 ) : null}
               </CardPanel>
             </Card>
@@ -2645,7 +2643,7 @@ function SettingsScreen() {
                 </div>
 
                 {selectedSummaryProvider ? (
-                  <FieldDescription>{selectedSummaryProvider.help}</FieldDescription>
+                  <p className="text-muted-foreground text-xs">{selectedSummaryProvider.help}</p>
                 ) : null}
 
                 {snapshot.summaryDraft.provider && summaryModelPresets.length > 0 && summaryModelUsesCustomInput ? (
