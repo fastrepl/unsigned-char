@@ -1,0 +1,4 @@
+# Minimal deps — stdlib does most of the work
+soundfile==0.12.1
+numpy==1.26.4
+pyroomacoustics==0.7.4
