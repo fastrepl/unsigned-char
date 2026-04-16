@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
-"""Score unsigned Char's speaker matching against stitched fixtures.
+"""Score unsigned Char's speaker matching against labeled meetings.
 
-For each fixture meeting:
-  1. Pick half the speakers as "enrolled" — their clips become stored profiles
-  2. The other half are "strangers" — the matcher should reject them
-  3. Run diarization + embedding on the meeting audio
-  4. Feed each turn's embedding to scoreSpeakerProfile via the TS bridge
-  5. Record the top suggestion (or "no match") per turn
+Expects ground truth from label.py — a per-meeting JSON with:
 
-Emits results/<name>.json with per-turn predictions and ground-truth labels.
+  {"speakers": {"Speaker 1": "John", "Speaker 2": "Yujong", ...}}
 
-This script assumes embeddings are produced by the same Swift pipeline used
-in-app. For the harness we accept a pre-computed embeddings file per meeting
-(embeddings.json) so we can iterate on scoring logic without rebuilding the
-Swift layer on every run. See `extract_embeddings.py` to generate those.
+And an embeddings.json per meeting produced by the Swift pipeline:
+
+  {
+    "speakers": {
+      "Speaker 1": [[...], [...]],   // one embedding per turn
+      "Speaker 2": [[...]]
+    }
+  }
+
+Runs store.ts matching logic in Python. For each meeting, half the *labeled*
+human identities become enrolled profiles, the other half are strangers the
+matcher should reject.
+
+Emits results/<name>.json with per-turn predictions.
 """
 
 import argparse
 import json
+import random
 from pathlib import Path
 
 
@@ -44,7 +50,6 @@ def normalized_centroid(embeddings: list[list[float]]) -> list[float]:
 
 
 def score_profile(embedding: list[float], profile: dict) -> dict:
-    """Mirror of store.ts scoreSpeakerProfile."""
     centroid_score = cosine(embedding, profile["centroid"])
     sample_scores = sorted(
         (cosine(embedding, s) for s in profile["samples"]),
@@ -62,7 +67,6 @@ def score_profile(embedding: list[float], profile: dict) -> dict:
 
 
 def recommend(embedding: list[float], profiles: list[dict]) -> dict | None:
-    """Mirror of store.ts recommendSpeakerProfile."""
     ranked = sorted(
         (score_profile(embedding, p) for p in profiles),
         key=lambda r: r["score"],
@@ -81,100 +85,116 @@ def recommend(embedding: list[float], profiles: list[dict]) -> dict | None:
         return None
 
     return {
-        "profile_id": best["profile_id"],
         "profile_name": best["profile_name"],
         "confidence": best["score"],
         "alternate_confidence": alternate_score,
     }
 
 
-def split_speakers(speakers: list[str], rng_seed: int) -> tuple[list[str], list[str]]:
-    import random
-
-    rng = random.Random(rng_seed)
-    shuffled = sorted(speakers)
+def split_people(people: list[str], seed: int) -> tuple[set[str], set[str]]:
+    rng = random.Random(seed)
+    shuffled = sorted(people)
     rng.shuffle(shuffled)
-    half = len(shuffled) // 2
-    return shuffled[:half], shuffled[half:]
-
-
-def load_embeddings(meeting_dir: Path) -> dict:
-    path = meeting_dir / "embeddings.json"
-    if not path.exists():
-        raise SystemExit(
-            f"Missing {path}. Run extract_embeddings.py first (or wire up the Swift bridge)."
-        )
-    return json.loads(path.read_text())
-
-
-def build_profiles(
-    speakers_to_enroll: list[str],
-    enrollment_embeddings: dict[str, list[list[float]]],
-) -> list[dict]:
-    profiles = []
-    for speaker in speakers_to_enroll:
-        samples = enrollment_embeddings.get(speaker, [])
-        if len(samples) < 2:
-            continue
-        profiles.append(
-            {
-                "id": f"profile_{speaker}",
-                "name": speaker,
-                "centroid": normalized_centroid(samples),
-                "samples": samples,
-            }
-        )
-    return profiles
+    half = max(1, len(shuffled) // 2)
+    return set(shuffled[:half]), set(shuffled[half:])
 
 
 def score_meeting(meeting_dir: Path, seed: int) -> dict:
     ground = json.loads((meeting_dir / "ground.json").read_text())
-    data = load_embeddings(meeting_dir)
-    enrollment = data["enrollment"]
-    per_turn = data["turns"]
+    embeddings = json.loads((meeting_dir / "embeddings.json").read_text())
 
-    enrolled, strangers = split_speakers(ground["speakers"], seed)
-    profiles = build_profiles(enrolled, enrollment)
+    speaker_to_person = {
+        speaker: person
+        for speaker, person in ground["speakers"].items()
+        if person and not person.startswith("__")
+    }
+    if not speaker_to_person:
+        return {"meeting": meeting_dir.name, "predictions": [], "skipped": "no labels"}
 
-    predictions = []
-    for turn, turn_embedding in zip(ground["turns"], per_turn):
-        suggestion = recommend(turn_embedding, profiles)
-        is_enrolled = turn["speaker"] in enrolled
-        predictions.append(
+    people = sorted(set(speaker_to_person.values()))
+    enrolled, strangers = split_people(people, seed)
+
+    profiles = []
+    for speaker, person in speaker_to_person.items():
+        if person not in enrolled:
+            continue
+        samples = embeddings["speakers"].get(speaker, [])
+        if len(samples) < 2:
+            continue
+        profiles.append(
             {
-                "speaker_truth": turn["speaker"],
-                "enrolled": is_enrolled,
-                "predicted": suggestion["profile_name"] if suggestion else None,
-                "confidence": suggestion["confidence"] if suggestion else None,
-                "start": turn["start_seconds"],
-                "end": turn["end_seconds"],
+                "id": f"profile_{person}",
+                "name": person,
+                "centroid": normalized_centroid(samples),
+                "samples": samples,
             }
         )
 
+    predictions = []
+    for speaker, person in speaker_to_person.items():
+        turn_embeddings = embeddings["speakers"].get(speaker, [])
+        for turn_embedding in turn_embeddings:
+            suggestion = recommend(turn_embedding, profiles)
+            predictions.append(
+                {
+                    "speaker_id": speaker,
+                    "truth": person,
+                    "enrolled": person in enrolled,
+                    "predicted": suggestion["profile_name"] if suggestion else None,
+                    "confidence": suggestion["confidence"] if suggestion else None,
+                }
+            )
+
     return {
         "meeting": meeting_dir.name,
-        "enrolled_speakers": enrolled,
-        "stranger_speakers": strangers,
+        "enrolled": sorted(enrolled),
+        "strangers": sorted(strangers),
         "predictions": predictions,
     }
 
 
+def collect_meetings(root: Path, ground_dir: Path) -> list[Path]:
+    """Pair every ground/<id>.json with meetings/<id>/embeddings.json."""
+    pairs = []
+    for ground_file in sorted(ground_dir.glob("*.json")):
+        meeting_dir = root / ground_file.stem
+        if (meeting_dir / "embeddings.json").exists():
+            ground_target = meeting_dir / "ground.json"
+            if not ground_target.exists() or ground_target.read_text() != ground_file.read_text():
+                meeting_dir.mkdir(parents=True, exist_ok=True)
+                ground_target.write_text(ground_file.read_text())
+            pairs.append(meeting_dir)
+    return pairs
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fixtures", type=Path, required=True)
+    parser.add_argument(
+        "--meetings",
+        type=Path,
+        default=Path(__file__).parent / "meetings",
+    )
+    parser.add_argument(
+        "--ground",
+        type=Path,
+        default=Path(__file__).parent / "ground",
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    meetings = []
-    for meeting_dir in sorted(args.fixtures.iterdir()):
-        if not (meeting_dir / "ground.json").exists():
-            continue
-        meetings.append(score_meeting(meeting_dir, args.seed))
-        print(f"scored {meeting_dir.name}")
+    meetings = collect_meetings(args.meetings, args.ground)
+    if not meetings:
+        raise SystemExit(
+            f"No meetings with both ground/*.json and {args.meetings}/*/embeddings.json"
+        )
+
+    results = [score_meeting(meeting_dir, args.seed) for meeting_dir in meetings]
+    for result in results:
+        print(f"scored {result['meeting']}  turns={len(result.get('predictions', []))}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps({"meetings": meetings}, indent=2))
+    args.out.write_text(json.dumps({"meetings": results}, indent=2))
     print(f"wrote {args.out}")
     return 0
 
