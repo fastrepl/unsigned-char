@@ -1,0 +1,6 @@
+ground/
+meetings/
+results/
+.venv/
+__pycache__/
+*.pyc
