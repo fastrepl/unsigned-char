@@ -403,8 +403,15 @@ private func normalizedEmbeddingCentroid(_ embeddings: [[Float]]) -> [Float] {
 
   var centroid = [Float](repeating: 0, count: first.count)
   for embedding in embeddings where embedding.count == centroid.count {
+    let sampleNorm = sqrt(embedding.reduce(Float.zero) { partialResult, value in
+      partialResult + (value * value)
+    })
+    guard sampleNorm > 0 else {
+      continue
+    }
+
     for (index, value) in embedding.enumerated() {
-      centroid[index] += value
+      centroid[index] += value / sampleNorm
     }
   }
 
